@@ -105,3 +105,6 @@ deploy:
   type: git
   repository: git@github.com:xucheng95/xucheng95.github.io.git
   branch: main
+
+mathjax:
+  enable: true
