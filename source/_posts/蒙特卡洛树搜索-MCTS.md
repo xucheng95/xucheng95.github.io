@@ -5,7 +5,20 @@ tags:
 ---
 **最近开始学习Game AI和强化学习相关的内容，发现蒙特卡洛树搜索(MCTS)在围棋等领域发挥了关键的作用。以前在做围棋项目的时候也曾接触过MCTS，但对它的具体原理和实现方法只是一知半解，将它作为第一篇博客内容也算是对过往知识的补充。**
 
-## MCTS
+## 1. 相关知识
+### 1.1 UCB
+
+实现结果:
+<div align="center">
+    <img src="images/ucb.png" width="50%" height="50%">
+</div>
+
+实现代码：[https://github.com/xucheng95/code_in_blog/blob/main/MCTS/ucb.py](https://github.com/xucheng95/code_in_blog/blob/main/MCTS/ucb.py)
+
+### 1.2 博弈树
+
+
+## 2. MCTS
 $$Q(s, a)=\frac{1}{N(s,a)}\sum_{i=1}^{N(s)}\mathbb I{(s,a)z_i}$$
 
 ## 参考资料
