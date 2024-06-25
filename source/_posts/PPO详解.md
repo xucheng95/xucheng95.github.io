@@ -1,7 +1,7 @@
 ---
 title: PPO详解
 date: 2024-06-24 17:14:14
-tags: 深度强化学习
+tags: PPO
 categories: 强化学习
 mathjax: True
 ---
