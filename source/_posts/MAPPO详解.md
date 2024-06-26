@@ -61,21 +61,17 @@ MAPPO算法的详细流程如下：
 
 ### 5.2 关键公式和优化目标
 
-MAPPO 算法的关键公式和优化目标包括：
+MAPPO目标函数：用于控制策略更新步长，以确保更新的稳定性，PPO的目标函数通常形式如下：
 
-- **PPO 目标函数**：用于控制策略更新步长，以确保更新的稳定性。
+$$
+\mathcal{L}^{PPO}(\theta) = \mathbb{E}_t \left[ \min(r_t(\theta) \hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t) \right]
+$$
 
-  PPO 的目标函数通常形式如下：
-
-  $$
-  \mathcal{L}^{PPO}(\theta) = \mathbb{E}_t \left[ \min(r_t(\theta) \hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t) \right]
-  $$
-
-  其中，
-  - $\theta$ 是策略网络的参数；
-  - $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ 是策略更新的比率；
-  - $\hat{A}_t$ 是优势估计；
-  - $\epsilon$ 是控制 PPO 策略更新步长的超参数。
+其中：
+- $\theta$ 是策略网络的参数；
+- $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ 是策略更新的比率；
+- $\hat{A}_t$ 是优势估计；
+- $\epsilon$ 是控制 PPO 策略更新步长的超参数。
 
 ### 5.3 在多代理环境中的调整与扩展
 
