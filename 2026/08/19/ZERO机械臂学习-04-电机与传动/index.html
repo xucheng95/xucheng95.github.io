@@ -1,0 +1,403 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮） | Xucheng95's Blog</title><meta name="author" content="Xucheng95"><meta name="copyright" content="Xucheng95"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="上一篇认识了物料清单，这一篇把&quot;动力系统&quot;讲透：步进电机为什么能精确控制、减速器怎么放大扭矩、同步带轮怎么传动力。读完你会明白代码里 reduction_ratio、MOTOR_DIR_* 这些字段到底对应机械上的什么。  1. 步进电机：能&quot;数着步数&quot;转的电机 普通电机 vs 步进电机     普通直流电机 步进电机     控制方式 给电压就转 给脉冲">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZERO 机械臂学习之路 04：电机与传动（步进电机&#x2F;减速器&#x2F;同步带轮）">
+<meta property="og:url" content="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/index.html">
+<meta property="og:site_name" content="Xucheng95&#39;s Blog">
+<meta property="og:description" content="上一篇认识了物料清单，这一篇把&quot;动力系统&quot;讲透：步进电机为什么能精确控制、减速器怎么放大扭矩、同步带轮怎么传动力。读完你会明白代码里 reduction_ratio、MOTOR_DIR_* 这些字段到底对应机械上的什么。  1. 步进电机：能&quot;数着步数&quot;转的电机 普通电机 vs 步进电机     普通直流电机 步进电机     控制方式 给电压就转 给脉冲">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://xucheng95.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-08-19T13:20:00.000Z">
+<meta property="article:modified_time" content="2026-08-19T12:58:31.447Z">
+<meta property="article:author" content="Xucheng95">
+<meta property="article:tag" content="传动">
+<meta property="article:tag" content="机械臂">
+<meta property="article:tag" content="电机">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://xucheng95.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）",
+  "url": "https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/",
+  "image": "https://xucheng95.github.io/img/avatar.jpg",
+  "datePublished": "2026-08-19T13:20:00.000Z",
+  "dateModified": "2026-08-19T12:58:31.447Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Xucheng95",
+      "url": "https://xucheng95.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.7.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"><link href="https://cdn.bootcss.com/KaTeX/0.11.1/katex.min.css" rel="stylesheet" /></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">5</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">9</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/homepage.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Xucheng95's Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-08-19T13:20:00.000Z" title="发表于 2026-08-19 21:20:00">2026-08-19</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-19T12:58:31.447Z" title="更新于 2026-08-19 20:58:31">2026-08-19</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82/">ZERO机械臂</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><blockquote>
+<p>上一篇认识了物料清单，这一篇把&quot;动力系统&quot;讲透：<strong>步进电机为什么能精确控制、减速器怎么放大扭矩、同步带轮怎么传动力</strong>。读完你会明白代码里 <code>reduction_ratio</code>、<code>MOTOR_DIR_*</code> 这些字段到底对应机械上的什么。</p>
+</blockquote>
+<h2 id="1-步进电机：能-数着步数-转的电机">1. 步进电机：能&quot;数着步数&quot;转的电机</h2>
+<h3 id="普通电机-vs-步进电机">普通电机 vs 步进电机</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>普通直流电机</th>
+<th>步进电机</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>控制方式</td>
+<td>给电压就转</td>
+<td>给脉冲序列才转</td>
+</tr>
+<tr>
+<td>转多少</td>
+<td>不可控（惯性大）</td>
+<td><strong>每脉冲转固定角度，可控</strong></td>
+</tr>
+<tr>
+<td>典型应用</td>
+<td>风扇、玩具</td>
+<td>3D 打印机、机械臂、数控机床</td>
+</tr>
+</tbody>
+</table>
+<p><strong>步进电机的核心原理</strong>：内部有多组线圈（相位），按顺序通电，转子就一步步转动。</p>
+<ul>
+<li>每给一个脉冲，转子转一个<strong>步距角</strong>（比如 1.8°）</li>
+<li>给 200 个脉冲 = 转 360°（200 × 1.8°）</li>
+<li>想转 90°？发 50 个脉冲就行</li>
+</ul>
+<p><strong>代码对应</strong>：<code>Emm_V5.c</code> 里控制电机转到指定角度，本质就是告诉驱动器&quot;要转多少步&quot;。</p>
+<h3 id="步距角-step-angle">步距角（Step Angle）</h3>
+<p>ZERO 用的步进电机步距角一般是 <strong>1.8°</strong>（即每脉冲转 1.8°，200 步一圈）。但加了减速器后，输出端每脉冲转的角度变成了：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>输出步距角</mtext><mo>=</mo><mfrac><mtext>电机步距角</mtext><mtext>减速比</mtext></mfrac><mo>=</mo><mfrac><mrow><mn>1.8</mn><mi mathvariant="normal">°</mi></mrow><mn>51</mn></mfrac><mo>≈</mo><mn>0.035</mn><mi mathvariant="normal">°</mi></mrow><annotation encoding="application/x-tex">\text{输出步距角} = \frac{\text{电机步距角}}{\text{减速比}} = \frac{1.8°}{51} ≈ 0.035°
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">输出步距角</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.04633em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">减速比</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">电机步距角</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.05744em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.37144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">5</span><span class="mord">1</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">.</span><span class="mord">8</span><span class="mord">°</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">0</span><span class="mord">3</span><span class="mord">5</span><span class="mord">°</span></span></span></span></span></p>
+<p><strong>这意味着</strong>：减速比越大，输出分辨率越高（转得越精细），同时扭矩越大、转速越慢。这就是为什么负载大的关节需要大减速比。</p>
+<h2 id="2-减速器：把-高速小力-变成-低速大力">2. 减速器：把&quot;高速小力&quot;变成&quot;低速大力&quot;</h2>
+<h3 id="为什么要减速">为什么要减速</h3>
+<p>电机天生&quot;高转速、小扭矩&quot;。机械臂需要的是&quot;低转速、大扭矩&quot;——要稳稳托住手臂和负载。</p>
+<p>减速器就是一台&quot;扭矩放大器&quot;：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>输出扭矩</mtext><mo>=</mo><mtext>电机扭矩</mtext><mo>×</mo><mtext>减速比</mtext></mrow><annotation encoding="application/x-tex">\text{输出扭矩} = \text{电机扭矩} \times \text{减速比}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">输出扭矩</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord text"><span class="mord cjk_fallback">电机扭矩</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">减速比</span></span></span></span></span></span></p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>输出转速</mtext><mo>=</mo><mfrac><mtext>电机转速</mtext><mtext>减速比</mtext></mfrac></mrow><annotation encoding="application/x-tex">\text{输出转速} = \frac{\text{电机转速}}{\text{减速比}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">输出转速</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.04633em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">减速比</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">电机转速</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<h3 id="行星减速器：zero-用的类型">行星减速器：ZERO 用的类型</h3>
+<p><strong>行星减速器</strong>是一种高精度、小体积的减速器，结构像太阳系：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">┌── 太阳轮（输入，电机轴）──┐</span><br><span class="line">│     ↙ 行星轮 ×3 ↖         │</span><br><span class="line">└── 齿圈（固定）──────┘</span><br><span class="line">     ↓ 行星架（输出，连关节）</span><br></pre></td></tr></table></figure>
+<ul>
+<li>电机轴带动中心的<strong>太阳轮</strong></li>
+<li>太阳轮驱动 3 个<strong>行星轮</strong>（同时绕自身转 + 绕太阳公转）</li>
+<li>行星轮带动<strong>行星架</strong>输出</li>
+</ul>
+<p>好处：多个行星轮分摊负载 → 体积小、扭矩大、精度高、同轴输入输出。非常适合机械臂这种紧凑场景。</p>
+<h3 id="减速比在代码里">减速比在代码里</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// robot.c 关节配置表</span></span><br><span class="line">&#123;<span class="number">90</span>, MOTOR_DIR_CCW, <span class="number">50</span>,    ..., <span class="number">0</span>, <span class="number">360</span>, DIR_NEGATIVE&#125;,  <span class="comment">/* 关节1：减速比50 */</span></span><br><span class="line">&#123;<span class="number">90</span>, MOTOR_DIR_CW,  <span class="number">50.89</span>, ..., <span class="number">90</span>, <span class="number">180</span>, DIR_NEGATIVE&#125;,  <span class="comment">/* 关节2：减速比50.89 */</span></span><br><span class="line">&#123;<span class="number">90</span>, MOTOR_DIR_CCW, <span class="number">26.85</span>, ..., <span class="number">0</span>, <span class="number">90</span>,  DIR_POSITIVE&#125;,  <span class="comment">/* 关节5：减速比26.85 */</span></span><br></pre></td></tr></table></figure>
+<p><strong>50.89 这种小数哪来的？</strong> 减速比 = 齿圈齿数 / 太阳轮齿数，比如齿圈 96 齿、太阳轮 33 齿……不对，标准公式是：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>减速比</mtext><mo>=</mo><mfrac><msub><mi>Z</mi><mtext>齿圈</mtext></msub><msub><mi>Z</mi><mtext>太阳轮</mtext></msub></mfrac><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\text{减速比} = \frac{Z_{\text{齿圈}}}{Z_{\text{太阳轮}}} + 1
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">减速比</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.19633em;vertical-align:-0.8360000000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.3139999999999996em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault" style="margin-right:0.07153em;">Z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.07153em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">太阳轮</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault" style="margin-right:0.07153em;">Z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.07153em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">齿圈</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8360000000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span></span></span></span></span></p>
+<p>比如齿圈 96、太阳轮 34：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mn>96</mn><mn>34</mn></mfrac><mo>+</mo><mn>1</mn><mo>≈</mo><mn>3.82</mn></mrow><annotation encoding="application/x-tex">\frac{96}{34} + 1 ≈ 3.82</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.190108em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.845108em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span><span class="mord mtight">4</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">9</span><span class="mord mtight">6</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span><span class="mord">.</span><span class="mord">8</span><span class="mord">2</span></span></span></span>？不对。实际行星减速器减速比的计算因结构而异，<strong>50.89 大概率是实测校准出来的值</strong>——作者用角度传感器实测&quot;电机转 N 圈、关节转多少度&quot;反推的。这也是为什么不同批次的减速器要微调这个值。</p>
+<blockquote>
+<p><strong>实操提示</strong>：你买到手的减速器如果和代码里的减速比略有出入（比如标称 51，代码写 50.89），联调时先按代码跑，如果发现&quot;命令转 90° 实际转 89°&quot;，就去改这个数字。这是复刻时非常常见的校准项。</p>
+</blockquote>
+<h2 id="3-闭环控制：张大头驱动器为什么-聪明">3. 闭环控制：张大头驱动器为什么&quot;聪明&quot;</h2>
+<h3 id="开环-vs-闭环">开环 vs 闭环</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>开环</th>
+<th>闭环</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>有没有反馈</td>
+<td>没有</td>
+<td><strong>有编码器测量实际位置</strong></td>
+</tr>
+<tr>
+<td>丢步了怎么办</td>
+<td>不知道，继续走</td>
+<td><strong>检测到误差，自动纠正</strong></td>
+</tr>
+<tr>
+<td>精度</td>
+<td>一般</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p>步进电机有个天然缺陷：负载过大时会&quot;丢步&quot;——脉冲发了但电机没跟上，位置就错了。开环系统无从察觉。</p>
+<p><strong>张大头是闭环驱动器</strong>：电机尾部带<strong>编码器</strong>（一个测量转角的传感器），驱动器随时知道电机实际转到哪。发现实际角度和指令角度有偏差 → 立即补偿。这就是它叫&quot;闭环&quot;的原因。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">指令角度 ──→ [比较器] ──→ 驱动器 ──→ 电机 ──→ 关节</span><br><span class="line">                 ↑                              │</span><br><span class="line">                 └──── 编码器测量实际角度 ←──────┘</span><br></pre></td></tr></table></figure>
+<h3 id="代码里的闭环体现">代码里的闭环体现</h3>
+<p><code>Emm_V5.c</code> 有读取电机状态、清除堵转保护等命令——这些都是在利用闭环能力。比如：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Emm_V5_Reset_Clog_Pro(addr);   <span class="comment">// 解除堵转保护：电机被卡住后，恢复前先解除保护</span></span><br></pre></td></tr></table></figure>
+<p>电机堵转（被卡死）时闭环驱动器会进入保护状态，需要发这个命令解除。</p>
+<h2 id="4-同步带轮：把动力-拐个弯">4. 同步带轮：把动力&quot;拐个弯&quot;</h2>
+<h3 id="为什么要同步带">为什么要同步带</h3>
+<p>机械臂的关节处空间极其紧凑，电机没法直接装在关节旋转轴上。<strong>同步带</strong>允许电机装在旁边，通过带子把动力传到关节轴：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[电机]──同步轮A（小）</span><br><span class="line">         │</span><br><span class="line">  同步带（带齿）</span><br><span class="line">         │</span><br><span class="line">[关节轴]─同步轮B（大）</span><br></pre></td></tr></table></figure>
+<h3 id="同步轮-vs-皮带轮">同步轮 vs 皮带轮</h3>
+<p><strong>同步轮是有齿的</strong>（3M = 齿距 3mm），同步带内表面也有对应的齿，两者啮合——<strong>不打滑</strong>。皮带轮靠摩擦力传动，重载会打滑，角度就不准了。</p>
+<p><strong>孔径的区别</strong>：同步轮中心的孔要套在轴上。BOM 里 8mm、5mm、6mm 三种孔径对应不同粗细的电机轴/关节轴。<strong>买之前必须量轴的直径</strong>，装不进去就麻烦了。</p>
+<h3 id="同步带传动的减速效果">同步带传动的减速效果</h3>
+<p>如果电机端同步轮 25 齿、关节端同步轮也是 25 齿（BOM 里都是 25 齿），那传动比是 1:1，<strong>同步带不改变减速比</strong>——它只负责&quot;拐弯传力&quot;，减速全靠减速器。</p>
+<h2 id="5-联轴器：把电机轴和负载轴-抱-在一起">5. 联轴器：把电机轴和负载轴&quot;抱&quot;在一起</h2>
+<h3 id="是什么">是什么</h3>
+<p>一个带螺丝的圆柱连接件，一端锁电机轴，一端锁减速器/关节轴：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[电机轴]──║联轴器║──[负载轴]</span><br><span class="line">          ║  ║</span><br><span class="line">         螺丝锁紧</span><br></pre></td></tr></table></figure>
+<h3 id="为什么不能直接焊接-硬连">为什么不能直接焊接/硬连</h3>
+<p>电机轴和负载轴<strong>不可能绝对同心</strong>（有微小偏差），硬连会导致振动和损坏。联轴器允许微小偏差，同时传递扭矩。抱紧式 = 用螺丝从侧面锁紧，简单可靠。</p>
+<h2 id="6-动力系统的完整链路-一个关节为例">6. 动力系统的完整链路（一个关节为例）</h2>
+<p>以关节 2（42 电机 + 51:1 行星减速器 + 同步带）为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">张大头驱动器</span><br><span class="line">   │  CAN 收到指令：&quot;转到 +30°&quot;</span><br><span class="line">   ▼</span><br><span class="line">42 步进电机</span><br><span class="line">   │  每脉冲 1.8°，闭环编码器实时校正</span><br><span class="line">   ▼</span><br><span class="line">行星减速器（51:1）</span><br><span class="line">   │  扭矩 ×51，转速 ÷51</span><br><span class="line">   ▼</span><br><span class="line">同步轮 A（25齿，孔径5mm）──同步带──同步轮 B（25齿，孔径8mm）</span><br><span class="line">   │  1:1 传动，动力拐弯</span><br><span class="line">   ▼</span><br><span class="line">关节轴 → 关节转动 30°</span><br></pre></td></tr></table></figure>
+<p><strong>代码视角</strong>：主控算好&quot;关节 2 应该转 30°&quot; → 换算成&quot;电机实际要转 30° × 51 = 1530°（4.25 圈）&quot; → 通过 CAN 发给驱动器 → 电机转 4.25 圈 → 关节转 30°。<strong>这个 51 就是 <code>reduction_ratio</code></strong>。</p>
+<h2 id="7-常见问题">7. 常见问题</h2>
+<p><strong>Q: 为什么关节 1 用减速比 50，而关节 5 只有 26.85？</strong><br>
+关节 1 扛着整条手臂，需要最大扭矩 → 大减速比。关节 5 只转末端小爪，负载小 → 小减速比，响应还更快。</p>
+<p><strong>Q: 步进电机和伺服电机有什么区别？</strong><br>
+伺服电机（带编码器的无刷电机）性能更好但贵得多。步进 + 闭环驱动是低成本机械臂的务实选择，ZERO 用张大头闭环方案就是用&quot;步进的价格&quot;获得接近伺服的精度。</p>
+<p><strong>Q: 怎么判断电机装反了？</strong><br>
+发 <code>rel_rotate 1 30</code>（关节 1 转 30°），如果关节转了 -30°，就是方向反了。改代码里关节表的 <code>MOTOR_DIR_CCW</code>/<code>MOTOR_DIR_CW</code>，或调整电机接线。</p>
+<h2 id="8-下一篇预告">8. 下一篇预告</h2>
+<p><a href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/">05 主控与通讯：STM32 / CAN 总线 / 串口</a> —— 从&quot;肌肉&quot;转到&quot;大脑&quot;：主控怎么和电机对话、CAN 总线为什么适合工业场景。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io">Xucheng95</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/">https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://xucheng95.github.io" target="_blank">Xucheng95's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%9C%BA%E6%A2%B0%E8%87%82/">机械臂</a><a class="post-meta__tags" href="/tags/%E7%94%B5%E6%9C%BA/">电机</a><a class="post-meta__tags" href="/tags/%E4%BC%A0%E5%8A%A8/">传动</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-03-BOM%E7%89%A9%E6%96%99%E5%85%A8%E8%A7%A3%E6%9E%90/" title="ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）</div></div><div class="info-2"><div class="info-item-1"> 打开仓库根目录的 BOM.xlsx，你会看到一张 29 行的物料表，每行还有淘宝链接。本篇把这 29 项按功能分类讲清楚：每个部件是什么、干什么用、为什么需要、买的时候注意什么。采购前必读。  1. 先看整体：一套机械臂由哪几部分组成 1234567891011┌─────────────────────────────────────────────┐│ 结构件：3D打印外壳 + 螺丝 + 轴承 + 热熔螺母  │ ← 机械臂的&quot;骨架&quot;├─────────────────────────────────────────────┤│ 动力：6台步进电机 + 减速器 + 同步带轮        │ ← 机械臂的&quot;肌肉&quot;├─────────────────────────────────────────────┤│ 驱动：6台张大头闭环驱动器 + 拓展板            │ ← 电机的&quot;指挥&quot;├─────────────────────────────────────────────┤│ 控制：STM32F407 开...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-03-BOM%E7%89%A9%E6%96%99%E5%85%A8%E8%A7%A3%E6%9E%90/" title="ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）</div></div><div class="info-2"><div class="info-item-1"> 打开仓库根目录的 BOM.xlsx，你会看到一张 29 行的物料表，每行还有淘宝链接。本篇把这 29 项按功能分类讲清楚：每个部件是什么、干什么用、为什么需要、买的时候注意什么。采购前必读。  1. 先看整体：一套机械臂由哪几部分组成 1234567891011┌─────────────────────────────────────────────┐│ 结构件：3D打印外壳 + 螺丝 + 轴承 + 热熔螺母  │ ← 机械臂的&quot;骨架&quot;├─────────────────────────────────────────────┤│ 动力：6台步进电机 + 减速器 + 同步带轮        │ ← 机械臂的&quot;肌肉&quot;├─────────────────────────────────────────────┤│ 驱动：6台张大头闭环驱动器 + 拓展板            │ ← 电机的&quot;指挥&quot;├─────────────────────────────────────────────┤│ 控制：STM32F407 开...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-02-%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%9F%BA%E7%A1%80%E6%A6%82%E5%BF%B5/" title="ZERO 机械臂学习之路 02：机器人基础概念（自由度&#x2F;坐标系&#x2F;正逆运动学）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 02：机器人基础概念（自由度&#x2F;坐标系&#x2F;正逆运动学）</div></div><div class="info-2"><div class="info-item-1"> 本篇用程序员的直觉讲清楚机器人学最核心的三个概念：自由度、坐标系变换、正逆运动学。读完你就能看懂 robot_kinematics.c 在算什么。不需要任何数学基础，所有公式都有&quot;人话版&quot;解释。  1. 自由度（DOF）：机器人有多少个&quot;能动的关节&quot; 人话版 自由度 = 机器人能独立运动的关节数量。ZERO 有 6 个旋转关节，所以是 6 自由度（6-DOF）机械臂。 你可以把每个关节想象成你的胳膊：    你的身体 机械臂 自由度     肩膀（可转） 关节 1、2、3 3   肘部 关节 4 1   手腕 关节 5、6 2   合计  6    为什么是 6？ 因为在三维空间中，要让末端（抓手）到达任意位置并摆出任意姿态，正好需要 6 个独立量：  位置：x、y、z（3 个量） 姿态：绕 x/y/z 轴的角度（3 个量）  3 + 3 = 6，所以 6 自由度是&quot;完整&quot;的机械臂。少于 6 只能到特定位置，多于 6（如人形机器人）是冗余——同一个位置有多种关节摆法。 在代码里 1#define ROBOT_MAX_J...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-01-%E9%A1%B9%E7%9B%AE%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/" title="ZERO 机械臂学习之路 01：项目总览与学习路线"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 01：项目总览与学习路线</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第一篇。本系列以一个真实开源项目——零一造物 ZERO 机械臂为教材，从零开始掌握机器人技术并完整复刻一台机械臂。目标读者：有编程经验、没碰过硬件的新手。  1. 这个项目是什么 ZERO 机械臂是 B 站 UP 主「零一造物」开源的一台桌面级六轴机械臂，主打高性价比（整套物料约 1300 元）和学习导向——把机器人领域的核心知识串起来：结构设计 → 运动学 → 控制 → 强化学习 → 大模型。 开源仓库内容一览：    目录 内容 你要学的     1. Model SolidWorks 三维模型 + 3D 打印件 结构设计、装配   2. Software/robot STM32 嵌入式控制代码（C + FreeRTOS） 嵌入式、控制   3. Simulink MATLAB 运动学推导与仿真 运动学、仿真   4. Other 图片资料 —   5. Deep_LR 强化学习（MuJoCo + TD3） 强化学习   BOM.xlsx 完整物料清单（含购买链接） 采购    2. 为什么用它当教材 作为新手，选学习项目最怕两件事：代...</div></div></div></a></div></div><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div class="vcomment" id="vcomment"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Xucheng95</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">5</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">9</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/xucheng95" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E6%AD%A5%E8%BF%9B%E7%94%B5%E6%9C%BA%EF%BC%9A%E8%83%BD-%E6%95%B0%E7%9D%80%E6%AD%A5%E6%95%B0-%E8%BD%AC%E7%9A%84%E7%94%B5%E6%9C%BA"><span class="toc-text">1. 步进电机：能&quot;数着步数&quot;转的电机</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%99%AE%E9%80%9A%E7%94%B5%E6%9C%BA-vs-%E6%AD%A5%E8%BF%9B%E7%94%B5%E6%9C%BA"><span class="toc-text">普通电机 vs 步进电机</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A5%E8%B7%9D%E8%A7%92-step-angle"><span class="toc-text">步距角（Step Angle）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E5%87%8F%E9%80%9F%E5%99%A8%EF%BC%9A%E6%8A%8A-%E9%AB%98%E9%80%9F%E5%B0%8F%E5%8A%9B-%E5%8F%98%E6%88%90-%E4%BD%8E%E9%80%9F%E5%A4%A7%E5%8A%9B"><span class="toc-text">2. 减速器：把&quot;高速小力&quot;变成&quot;低速大力&quot;</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%87%8F%E9%80%9F"><span class="toc-text">为什么要减速</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%8C%E6%98%9F%E5%87%8F%E9%80%9F%E5%99%A8%EF%BC%9Azero-%E7%94%A8%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-text">行星减速器：ZERO 用的类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%8F%E9%80%9F%E6%AF%94%E5%9C%A8%E4%BB%A3%E7%A0%81%E9%87%8C"><span class="toc-text">减速比在代码里</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E9%97%AD%E7%8E%AF%E6%8E%A7%E5%88%B6%EF%BC%9A%E5%BC%A0%E5%A4%A7%E5%A4%B4%E9%A9%B1%E5%8A%A8%E5%99%A8%E4%B8%BA%E4%BB%80%E4%B9%88-%E8%81%AA%E6%98%8E"><span class="toc-text">3. 闭环控制：张大头驱动器为什么&quot;聪明&quot;</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E7%8E%AF-vs-%E9%97%AD%E7%8E%AF"><span class="toc-text">开环 vs 闭环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E9%87%8C%E7%9A%84%E9%97%AD%E7%8E%AF%E4%BD%93%E7%8E%B0"><span class="toc-text">代码里的闭环体现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E5%90%8C%E6%AD%A5%E5%B8%A6%E8%BD%AE%EF%BC%9A%E6%8A%8A%E5%8A%A8%E5%8A%9B-%E6%8B%90%E4%B8%AA%E5%BC%AF"><span class="toc-text">4. 同步带轮：把动力&quot;拐个弯&quot;</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%90%8C%E6%AD%A5%E5%B8%A6"><span class="toc-text">为什么要同步带</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E8%BD%AE-vs-%E7%9A%AE%E5%B8%A6%E8%BD%AE"><span class="toc-text">同步轮 vs 皮带轮</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E5%B8%A6%E4%BC%A0%E5%8A%A8%E7%9A%84%E5%87%8F%E9%80%9F%E6%95%88%E6%9E%9C"><span class="toc-text">同步带传动的减速效果</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E8%81%94%E8%BD%B4%E5%99%A8%EF%BC%9A%E6%8A%8A%E7%94%B5%E6%9C%BA%E8%BD%B4%E5%92%8C%E8%B4%9F%E8%BD%BD%E8%BD%B4-%E6%8A%B1-%E5%9C%A8%E4%B8%80%E8%B5%B7"><span class="toc-text">5. 联轴器：把电机轴和负载轴&quot;抱&quot;在一起</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%98%AF%E4%BB%80%E4%B9%88"><span class="toc-text">是什么</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E7%84%8A%E6%8E%A5-%E7%A1%AC%E8%BF%9E"><span class="toc-text">为什么不能直接焊接&#x2F;硬连</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%8A%A8%E5%8A%9B%E7%B3%BB%E7%BB%9F%E7%9A%84%E5%AE%8C%E6%95%B4%E9%93%BE%E8%B7%AF-%E4%B8%80%E4%B8%AA%E5%85%B3%E8%8A%82%E4%B8%BA%E4%BE%8B"><span class="toc-text">6. 动力系统的完整链路（一个关节为例）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98"><span class="toc-text">7. 常见问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E4%B8%8B%E4%B8%80%E7%AF%87%E9%A2%84%E5%91%8A"><span class="toc-text">8. 下一篇预告</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/" title="ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）">ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）</a><time datetime="2026-08-19T13:20:00.000Z" title="发表于 2026-08-19 21:20:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-03-BOM%E7%89%A9%E6%96%99%E5%85%A8%E8%A7%A3%E6%9E%90/" title="ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）">ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）</a><time datetime="2026-08-19T13:10:00.000Z" title="发表于 2026-08-19 21:10:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-02-%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%9F%BA%E7%A1%80%E6%A6%82%E5%BF%B5/" title="ZERO 机械臂学习之路 02：机器人基础概念（自由度/坐标系/正逆运动学）">ZERO 机械臂学习之路 02：机器人基础概念（自由度/坐标系/正逆运动学）</a><time datetime="2026-08-19T13:00:00.000Z" title="发表于 2026-08-19 21:00:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-01-%E9%A1%B9%E7%9B%AE%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/" title="ZERO 机械臂学习之路 01：项目总览与学习路线">ZERO 机械臂学习之路 01：项目总览与学习路线</a><time datetime="2026-08-19T12:50:00.000Z" title="发表于 2026-08-19 20:50:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/Hexo%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97/" title="Hexo 使用指南">Hexo 使用指南</a><time datetime="2026-08-19T12:37:00.000Z" title="发表于 2026-08-19 20:37:00">2026-08-19</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2022 - 2026 By Xucheng95</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.7.0"></script><script src="/js/main.js?v=5.7.0"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = null
+
+  const initValine = (el, path) => {
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyValine = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+
+    const valineConfig = {
+      el: '#vcomment',
+      appId: 'dPE8NdWqLHIBK3b1UzDKzh1V-gzGzoHsz',
+      appKey: 'LVW5ij737ZzbbvgGPhZaSwtl',
+      avatar: 'monsterid',
+      serverURLs: '',
+      emojiMaps: "",
+      visitor: false,
+      ...option,
+      path: isShuoshuo ? path : (option && option.path) || window.location.pathname
+    }
+
+    new Valine(valineConfig)
+  }
+
+  const loadValine = async (el, path) => {
+    if (typeof Valine === 'function') {
+      initValine(el, path)
+    } else {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/valine@1.5.3/dist/Valine.min.js')
+      initValine(el, path)
+    }
+  }
+
+  if (isShuoshuo) {
+    'Valine' === 'Valine'
+      ? window.shuoshuoComment = { loadComment: loadValine }
+      : window.loadOtherComment = loadValine
+    return
+  }
+
+  if ('Valine' === 'Valine' || !false) {
+    if (false) btf.loadComment(document.getElementById('vcomment'),loadValine)
+    else setTimeout(loadValine, 0)
+  } else {
+    window.loadOtherComment = loadValine
+  }
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.7.0"></script></div></div></body></html>
