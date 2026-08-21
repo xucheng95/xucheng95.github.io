@@ -1,0 +1,381 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑） | Xucheng95's Blog</title><meta name="author" content="Xucheng95"><meta name="copyright" content="Xucheng95"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="这是「ZERO 机械臂学习之路」系列的第 08 篇。复位学会了，这一篇进入正式联调：用串口命令把每个关节玩转——rel_rotate 单关节转动、zero 设零点，并系统整理联调中 90% 会遇到的坑。里程碑：每个关节都能按指令精确转动。  1. 联调前的准备  整机装配完成（没装完可以先只测主控 + 1 个电机）  第 7 篇的上电流程跑通，hard_reset 正常  串口工具（XCOM &amp;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZERO 机械臂学习之路 08：串口命令联调（rel_rotate &#x2F; zero &#x2F; 常见坑）">
+<meta property="og:url" content="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/index.html">
+<meta property="og:site_name" content="Xucheng95&#39;s Blog">
+<meta property="og:description" content="这是「ZERO 机械臂学习之路」系列的第 08 篇。复位学会了，这一篇进入正式联调：用串口命令把每个关节玩转——rel_rotate 单关节转动、zero 设零点，并系统整理联调中 90% 会遇到的坑。里程碑：每个关节都能按指令精确转动。  1. 联调前的准备  整机装配完成（没装完可以先只测主控 + 1 个电机）  第 7 篇的上电流程跑通，hard_reset 正常  串口工具（XCOM &amp;">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://xucheng95.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-08-19T22:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-21T09:50:23.994Z">
+<meta property="article:author" content="Xucheng95">
+<meta property="article:tag" content="串口">
+<meta property="article:tag" content="机械臂">
+<meta property="article:tag" content="联调">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://xucheng95.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）",
+  "url": "https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/",
+  "image": "https://xucheng95.github.io/img/avatar.jpg",
+  "datePublished": "2026-08-19T22:00:00.000Z",
+  "dateModified": "2026-08-21T09:50:23.994Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Xucheng95",
+      "url": "https://xucheng95.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.7.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"><link href="https://cdn.bootcss.com/KaTeX/0.11.1/katex.min.css" rel="stylesheet" /></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/homepage.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Xucheng95's Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-08-19T22:00:00.000Z" title="发表于 2026-08-19 22:00:00">2026-08-19</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-21T09:50:23.994Z" title="更新于 2026-08-21 09:50:23">2026-08-21</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82/">ZERO机械臂</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><blockquote>
+<p>这是「ZERO 机械臂学习之路」系列的第 08 篇。复位学会了，这一篇进入正式联调：用<strong>串口命令</strong>把每个关节玩转——<code>rel_rotate</code> 单关节转动、<code>zero</code> 设零点，并系统整理联调中 90% 会遇到的坑。<strong>里程碑：每个关节都能按指令精确转动</strong>。</p>
+</blockquote>
+<h2 id="1-联调前的准备"><a href="#1-联调前的准备" class="headerlink" title="1. 联调前的准备"></a>1. 联调前的准备</h2><ul>
+<li><input disabled="" type="checkbox"> 整机装配完成（没装完可以先只测主控 + 1 个电机）</li>
+<li><input disabled="" type="checkbox"> 第 7 篇的上电流程跑通，<code>hard_reset</code> 正常</li>
+<li><input disabled="" type="checkbox"> 串口工具（XCOM &#x2F; Sscom），波特率 <strong>115200</strong>，勾选”发送新行”</li>
+<li><input disabled="" type="checkbox"> 6 个驱动器的 CAN 地址确认正确（张大头驱动器用拨码&#x2F;软件设置地址 1~6，与 <code>Emm_V5.c</code> 里的 <code>addr</code> 对应）</li>
+</ul>
+<h2 id="2-命令速查表（再复习一遍）"><a href="#2-命令速查表（再复习一遍）" class="headerlink" title="2. 命令速查表（再复习一遍）"></a>2. 命令速查表（再复习一遍）</h2><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>参数</th>
+<th>功能</th>
+<th>联调用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>hard_reset</code></td>
+<td>—</td>
+<td>硬复位</td>
+<td>开机必做</td>
+</tr>
+<tr>
+<td><code>soft_reset</code></td>
+<td>—</td>
+<td>软复位</td>
+<td>回初始姿态</td>
+</tr>
+<tr>
+<td><code>zero</code></td>
+<td>—</td>
+<td>当前位置设为零点</td>
+<td>自定义零点</td>
+</tr>
+<tr>
+<td><code>rel_rotate</code></td>
+<td><code>关节号 角度</code></td>
+<td>相对转动（支持负数）</td>
+<td>★ 单关节测试</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td><code>x y z</code></td>
+<td>末端移动到指定位置</td>
+<td>第 9 篇细讲</td>
+</tr>
+</tbody></table>
+<h2 id="3-逐条命令实操"><a href="#3-逐条命令实操" class="headerlink" title="3. 逐条命令实操"></a>3. 逐条命令实操</h2><h3 id="3-1-先做一次硬复位"><a href="#3-1-先做一次硬复位" class="headerlink" title="3.1 先做一次硬复位"></a>3.1 先做一次硬复位</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hard_reset</span><br></pre></td></tr></table></figure>
+
+<p>观察串口日志，每个关节复位时会打印（<code>robot_joint_reset</code> 里）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">joint 1 limit switch already happend       ← 开关本来就顶着，直接清零</span><br></pre></td></tr></table></figure>
+
+<p>或复位过程中中断触发：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">joint limit switch happened, joint id: 2    ← EXTI 中断触发了</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-rel-rotate：单关节相对转动"><a href="#3-2-rel-rotate：单关节相对转动" class="headerlink" title="3.2 rel_rotate：单关节相对转动"></a>3.2 rel_rotate：单关节相对转动</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">rel_rotate 1 30      ← 关节 1 正转 30°</span><br><span class="line">rel_rotate 1 -30     ← 关节 1 反转 30°</span><br><span class="line">rel_rotate 2 10      ← 关节 2 转 10°</span><br></pre></td></tr></table></figure>
+
+<p>代码路径（<code>robot_cmd.c</code> → <code>robot.c</code>）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">robot_rel_rotate_handle</span><span class="params">(<span class="type">float</span> *param)</span> &#123;</span><br><span class="line">    <span class="type">uint32_t</span> joint_id = (<span class="type">uint32_t</span>)param[<span class="number">0</span>];</span><br><span class="line">    <span class="keyword">return</span> robot_send_rel_rotate_event(joint_id, param[<span class="number">1</span>]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>事件被 <code>robot_control_task</code> 处理，最终走 <code>robot_joint_rotate_to</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">robot_joint_rotate_to(joint_id, DIR_POSITIVE, angle,</span><br><span class="line">    ROBOT_JOINT_DEFAULT_VELOCITY,   <span class="comment">// 默认速度 10 rpm</span></span><br><span class="line">    ROBOT_JOINT_DEFAULT_ACCELERATION, <span class="comment">// 默认加速度 200</span></span><br><span class="line">    <span class="literal">false</span>);   <span class="comment">// 相对模式</span></span><br></pre></td></tr></table></figure>
+
+<p>日志里你会看到：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[joint_id: 1] ROBOT_JOINT_REL_ROTATE 30.000000</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-zero：自定义零点"><a href="#3-3-zero：自定义零点" class="headerlink" title="3.3 zero：自定义零点"></a>3.3 zero：自定义零点</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">zero</span><br></pre></td></tr></table></figure>
+
+<p>把所有驱动器的编码器位置清零（<code>Emm_V5_Reset_CurPos_To_Zero</code>）。清零后，再发 <code>rel_rotate</code> 就以新零点为基准。</p>
+<blockquote>
+<p><strong>建议的零点流程</strong>：先 <code>hard_reset</code>（物理零点，撞限位）→ 再按需 <code>zero</code>（逻辑零点，比如你想让某个姿态作为”初始姿态”）。</p>
+</blockquote>
+<h2 id="4-联调核心坑位（按出现频率排序）"><a href="#4-联调核心坑位（按出现频率排序）" class="headerlink" title="4. 联调核心坑位（按出现频率排序）"></a>4. 联调核心坑位（按出现频率排序）</h2><h3 id="坑-1：命令没反应，串口无日志"><a href="#坑-1：命令没反应，串口无日志" class="headerlink" title="坑 1：命令没反应，串口无日志"></a>坑 1：命令没反应，串口无日志</h3><ul>
+<li>串口工具没勾”发送新行”（代码靠 <code>\n</code> 判定命令结束）——<strong>最最常见</strong></li>
+<li>TX&#x2F;RX 接反</li>
+<li>波特率不是 115200</li>
+</ul>
+<h3 id="坑-2：转动方向反了"><a href="#坑-2：转动方向反了" class="headerlink" title="坑 2：转动方向反了"></a>坑 2：转动方向反了</h3><p>发 <code>rel_rotate 1 30</code>，关节却转了 -30°。修复（第 4 篇讲过）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// robot.c 关节配置表：正方向对应的电机旋转方向</span></span><br><span class="line">&#123;<span class="number">90</span>, MOTOR_DIR_CCW, <span class="number">50</span>, ..., <span class="number">0</span>, <span class="number">360</span>, DIR_NEGATIVE&#125;,  <span class="comment">/* 关节1 */</span></span><br></pre></td></tr></table></figure>
+
+<p>把 <code>MOTOR_DIR_CCW</code> 改成 <code>MOTOR_DIR_CW</code>（或反过来），重新编译烧录。</p>
+<h3 id="坑-3：角度不准（转-90°-实际转-89°）"><a href="#坑-3：角度不准（转-90°-实际转-89°）" class="headerlink" title="坑 3：角度不准（转 90° 实际转 89°）"></a>坑 3：角度不准（转 90° 实际转 89°）</h3><p><strong>减速比没对齐</strong>。<code>g_joints_init</code> 里的 <code>reduction_ratio</code>（50 &#x2F; 50.89 &#x2F; 51 &#x2F; 26.85）必须和实际减速器一致：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">uint32_t</span> steps = <span class="built_in">fabs</span>(round(rel_angle * joint-&gt;reduction_ratio * <span class="number">3200</span> / <span class="number">360</span>));</span><br></pre></td></tr></table></figure>
+
+<p>这个公式把”关节角度 × 减速比 × 每圈步数(3200)”换算成电机步数——减速比错一个，角度全错。校准方法：实测”电机转 N 圈、关节转多少度”，反推 <code>reduction_ratio</code> 填进去。</p>
+<h3 id="坑-4：某个关节不动-乱动"><a href="#坑-4：某个关节不动-乱动" class="headerlink" title="坑 4：某个关节不动 &#x2F; 乱动"></a>坑 4：某个关节不动 &#x2F; 乱动</h3><ul>
+<li>检查该关节驱动器的 <strong>CAN 地址</strong>是否与代码里的 <code>addr</code> 对应（<code>Emm_V5_*</code> 函数第一个参数）</li>
+<li>检查 CAN 总线接线：双绞线是否串联、<strong>终端电阻</strong>是否在位</li>
+<li>检查该关节的限位状态：如果 <code>ROBOT_STATUS_LIMIT_HAPPENED</code> 还挂着，关节可能拒绝转动（复位后未清状态位）</li>
+</ul>
+<h3 id="坑-5：电机堵转保护"><a href="#坑-5：电机堵转保护" class="headerlink" title="坑 5：电机堵转保护"></a>坑 5：电机堵转保护</h3><p>负载过大或卡住时，闭环驱动器会进入堵转保护。代码里有专门的解除函数：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Emm_V5_Reset_Clog_Pro(addr);   <span class="comment">// 解除堵转保护</span></span><br></pre></td></tr></table></figure>
+
+<p>联调时关节被卡住后再发命令没反应，先解除堵转保护，再排查机械卡顿。</p>
+<h3 id="坑-6：日志乱码"><a href="#坑-6：日志乱码" class="headerlink" title="坑 6：日志乱码"></a>坑 6：日志乱码</h3><p>波特率不对（常见 9600&#x2F;57600&#x2F;115200 混用），或串口工具编码不是 UTF-8&#x2F;GBK。ZERO 日志是中文，选对编码。</p>
+<h2 id="5-一个完整的联调脚本（照着发）"><a href="#5-一个完整的联调脚本（照着发）" class="headerlink" title="5. 一个完整的联调脚本（照着发）"></a>5. 一个完整的联调脚本（照着发）</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 复位</span></span><br><span class="line">hard_reset</span><br><span class="line"><span class="comment"># 2. 确认每个关节能转（依次测 1~6）</span></span><br><span class="line">rel_rotate 1 30</span><br><span class="line">rel_rotate 1 -30</span><br><span class="line">rel_rotate 2 30</span><br><span class="line">rel_rotate 2 -30</span><br><span class="line">...</span><br><span class="line">rel_rotate 6 30</span><br><span class="line">rel_rotate 6 -30</span><br><span class="line"><span class="comment"># 3. 设零点</span></span><br><span class="line">zero</span><br><span class="line"><span class="comment"># 4. 软复位验证回到零点姿态</span></span><br><span class="line">soft_reset</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>每个关节”转 30° 再转回 -30°”是最安全的单关节验证。<strong>转之前先想清楚这个关节的活动范围</strong>（比如关节 2 只能 90°~180°），别把机械臂掰到限位之外。</p>
+</blockquote>
+<h2 id="6-常见问题"><a href="#6-常见问题" class="headerlink" title="6. 常见问题"></a>6. 常见问题</h2><p><strong>Q: rel_rotate 的角度是相对还是绝对？</strong><br><strong>相对</strong>——在当前位置基础上转指定角度，支持负数（反向）。绝对定位由 <code>auto</code>（末端位置）和软复位（关节绝对角度）承担。</p>
+<p><strong>Q: 为什么有的关节转起来很慢？</strong><br>默认速度 <code>ROBOT_JOINT_DEFAULT_VELOCITY = 10 rpm</code>，对所有关节一样。负载大的关节（关节 1）转速慢是正常的；如果想单独调，可以改配置表或后续用高级命令。</p>
+<p><strong>Q: 联调时电机抖动&#x2F;异响？</strong><br>检查电机电流设置、驱动器细分设置，或机械装配卡涩（同步带太紧、螺丝过紧都会导致）。</p>
+<h2 id="7-本篇小结"><a href="#7-本篇小结" class="headerlink" title="7. 本篇小结"></a>7. 本篇小结</h2><p>单关节联调的本质是验证三件事：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">命令解析正确（串口 → cmd_queue → 命令表）</span><br><span class="line">    ↓</span><br><span class="line">电机方向正确（MOTOR_DIR_* 和实际接线一致）</span><br><span class="line">    ↓</span><br><span class="line">角度换算正确（reduction_ratio 和实际减速器一致）</span><br></pre></td></tr></table></figure>
+
+<p>三件事都对了，机械臂就会”指哪打哪”。下一步把多个关节协同起来——用 <code>auto</code> 命令让<strong>末端</strong>移动到指定空间位置，进入运动学联调。</p>
+<h2 id="8-下一篇预告"><a href="#8-下一篇预告" class="headerlink" title="8. 下一篇预告"></a>8. 下一篇预告</h2><p><a href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/">09 运动学联调：auto 命令 &#x2F; 坐标系 &#x2F; 路径插值</a> —— 从”单关节能转”到”末端自动到位”：<code>auto x y z</code> 背后是路径插值 + 逆解 + PID 的全链路。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io">Xucheng95</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/">https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://xucheng95.github.io" target="_blank">Xucheng95's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%9C%BA%E6%A2%B0%E8%87%82/">机械臂</a><a class="post-meta__tags" href="/tags/%E4%B8%B2%E5%8F%A3/">串口</a><a class="post-meta__tags" href="/tags/%E8%81%94%E8%B0%83/">联调</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 09 篇。第 02 篇学了理论（正逆运动学），这一篇看它们在真机上是怎样协作的：发一条 auto x y z，机械臂从”会转”到”末端自动到位”。里程碑：末端按指令到达指定位置。  1. auto 命令：一句话让末端动起来1auto 0 0 200  意思是：让末端移动到 (x=0, y=0, z=200) 的位置（单位 mm）。注意 README 里的提醒：注意坐标方向。 代码路径（robot_cmd.c → robot_control_task）： 12345&quot;auto x y z&quot; → robot_auto_handle() → robot_send_auto_event()    ↓event_queue → robot_control_task → ROBOT_AUTO_EVENT 分支    ↓robot_auto_move_interpolation()   ← ★ 本篇主角  2. auto 背后的四步流水线robot_auto_move_interpolation()（robot.c）完整地串起了第...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-07-%E4%B8%8A%E7%94%B5%E4%B8%8E%E5%A4%8D%E4%BD%8D/" title="ZERO 机械臂学习之路 07：上电与复位（限位开关 / 硬复位 / 软复位）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">ZERO 机械臂学习之路 07：上电与复位（限位开关 / 硬复位 / 软复位）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 07 篇。机械臂有个”失忆症”：断电后它不知道自己转到哪了。这一篇讲它怎么找回自己：限位开关（触觉）、硬复位（撞开关找零点）、软复位（不撞开关直接回位）。这是上电联调的第一步。  1. 为什么需要复位步进电机的编码器记录的是”相对位置”。断电再上电，主控不知道电机现在转到哪个角度——如果直接发命令让它动，它可能朝着错误方向乱转，甚至撞坏结构件。 所以开机第一件事：让机械臂回到一个已知的位置（零点）。ZERO 提供了两条路：    方式 命令 原理 需要限位开关    硬复位 hard_reset 每个关节转到撞上限位开关为止，把撞到的位置记为 0° ✅   软复位 soft_reset 不撞开关，按当前角度走最短路径回到初始化角度 ❌   2. 限位开关：机械臂的”触觉”硬件BOM 里有 5 个限位开关（KW11-3Z-A ×3 + KW11-3Z-B ×2，A&#x2F;B 只是杠杆形状不同），接在 STM32 的 PD0~PD5（JOINT_LIMIT_1_Pin ~ JOINT_LIMIT_6_Pin）。  注意：6 个关节只有 ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto &#x2F; 坐标系 &#x2F; 路径插值）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 09：运动学联调（auto &#x2F; 坐标系 &#x2F; 路径插值）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 09 篇。第 02 篇学了理论（正逆运动学），这一篇看它们在真机上是怎样协作的：发一条 auto x y z，机械臂从”会转”到”末端自动到位”。里程碑：末端按指令到达指定位置。  1. auto 命令：一句话让末端动起来1auto 0 0 200  意思是：让末端移动到 (x=0, y=0, z=200) 的位置（单位 mm）。注意 README 里的提醒：注意坐标方向。 代码路径（robot_cmd.c → robot_control_task）： 12345&quot;auto x y z&quot; → robot_auto_handle() → robot_send_auto_event()    ↓event_queue → robot_control_task → ROBOT_AUTO_EVENT 分支    ↓robot_auto_move_interpolation()   ← ★ 本篇主角  2. auto 背后的四步流水线robot_auto_move_interpolation()（robot.c）完整地串起了第...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-07-%E4%B8%8A%E7%94%B5%E4%B8%8E%E5%A4%8D%E4%BD%8D/" title="ZERO 机械臂学习之路 07：上电与复位（限位开关 &#x2F; 硬复位 &#x2F; 软复位）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 07：上电与复位（限位开关 &#x2F; 硬复位 &#x2F; 软复位）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 07 篇。机械臂有个”失忆症”：断电后它不知道自己转到哪了。这一篇讲它怎么找回自己：限位开关（触觉）、硬复位（撞开关找零点）、软复位（不撞开关直接回位）。这是上电联调的第一步。  1. 为什么需要复位步进电机的编码器记录的是”相对位置”。断电再上电，主控不知道电机现在转到哪个角度——如果直接发命令让它动，它可能朝着错误方向乱转，甚至撞坏结构件。 所以开机第一件事：让机械臂回到一个已知的位置（零点）。ZERO 提供了两条路：    方式 命令 原理 需要限位开关    硬复位 hard_reset 每个关节转到撞上限位开关为止，把撞到的位置记为 0° ✅   软复位 soft_reset 不撞开关，按当前角度走最短路径回到初始化角度 ❌   2. 限位开关：机械臂的”触觉”硬件BOM 里有 5 个限位开关（KW11-3Z-A ×3 + KW11-3Z-B ×2，A&#x2F;B 只是杠杆形状不同），接在 STM32 的 PD0~PD5（JOINT_LIMIT_1_Pin ~ JOINT_LIMIT_6_Pin）。  注意：6 个关节只有 ...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/" title="ZERO 机械臂学习之路 05：主控与通讯（STM32 &#x2F; CAN 总线 &#x2F; 串口）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 05：主控与通讯（STM32 &#x2F; CAN 总线 &#x2F; 串口）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 05 篇。上一篇讲完了”肌肉”（电机与传动），这一篇讲”大脑”和”神经”：主控 STM32 怎么调度任务、串口怎么收你的命令、CAN 总线怎么跟 6 个电机对话。读完你会对整个 robot 工程的启动流程和消息流转有完整认识。  1. 主控：STM32F407VET6整台机械臂的”大脑”是一块 STM32F407VET6 开发板（BOM 第 3 项）。为什么是它：  Cortex-M4F 内核，168MHz，带硬件浮点单元——跑运动学逆解的那堆三角函数和矩阵运算没问题 自带 CAN 控制器（关键外设！）——连接张大头驱动器全靠它 资源足够跑 FreeRTOS + 运动学计算 + 串口&#x2F;网络协议，还有富余  从 robot.ioc（CubeMX 工程文件）可以看到用到的外设：    外设 引脚 用途    CAN1 PB8 &#x2F; PB9 连接 6 个张大头驱动器（CAN 总线）   USART1 — 串口命令输入（电脑 ↔ 主控，115200）   USART3 — 接 ESP8266 WiFi 模块（MQTT 远程，默...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-01-%E9%A1%B9%E7%9B%AE%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/" title="ZERO 机械臂学习之路 01：项目总览与学习路线"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 01：项目总览与学习路线</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 01 篇。本系列以一个真实开源项目——零一造物 ZERO 机械臂为教材，从零开始掌握机器人技术并完整复刻一台机械臂。目标读者：有编程经验、没碰过硬件的新手。  1. 这个项目是什么ZERO 机械臂是 B 站 UP 主「零一造物」开源的一台桌面级六轴机械臂，主打高性价比（整套物料约 1300 元）和学习导向——把机器人领域的核心知识串起来：结构设计 → 运动学 → 控制 → 强化学习 → 大模型。 开源仓库内容一览：    目录 内容 你要学的    1. Model SolidWorks 三维模型 + 3D 打印件 结构设计、装配   2. Software/robot STM32 嵌入式控制代码（C + FreeRTOS） 嵌入式、控制   3. Simulink MATLAB 运动学推导与仿真 运动学、仿真   4. Other 图片资料 —   5. Deep_LR 强化学习（MuJoCo + TD3） 强化学习   BOM.xlsx 完整物料清单（含购买链接） 采购   2. 为什么用它当教材作为新手，选学习项目最怕两件事：代码...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/" title="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 &#x2F; MuJoCo &#x2F; 展望）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 &#x2F; MuJoCo &#x2F; 展望）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的最后一篇。前 11 篇学的是”人教机器怎么动”（运动学 + PID），这一篇看”机器自己学怎么动”：用 MuJoCo 物理仿真 + TD3 强化学习，让机械臂学会末端跟踪目标位置。最后聊聊大模型接入的展望，以及整个系列的沉淀。  1. 为什么要强化学习传统控制的思路（前 9 篇）：建数学模型 → 解方程 → 写控制律。但真实世界有摩擦、形变、噪声，模型永远不完美；遇到”学会某个技能”这类问题，手工设计控制律越来越难。 强化学习（Reinforcement Learning, RL）换了个思路：不给指令，给奖励。智能体（机械臂）在环境里试错，做对了给正奖励、做错了给负奖励，最终自己摸索出策略——就像教小狗握手，做对了给零食。 12传统控制：目标 → 逆解/规划 → PID → 执行（人设计每一步）强化学习：目标 → 奖励函数 → 智能体不断试错 → 学到策略（机器自己找路径）  2. 环境：MuJoCo 里的”虚拟机械臂”代码在 5. Deep_LR/，环境文件 robot_arm_env.py，用 MuJoCo 做物理引擎（robot_ar...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-06-%E5%B5%8C%E5%85%A5%E5%BC%8F%E5%B7%A5%E5%85%B7%E9%93%BE/" title="ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 06 篇。上一篇认识了主控和通讯，这一篇把”编译烧录”这条工具链打通：装什么软件、工程目录是什么结构、怎么编译、怎么烧录、怎么用串口日志调试。里程碑：看到串口里出现 robot control task runing!!!。  1. 需要安装的软件清单   软件 作用 备注    STM32CubeMX 图形化配置外设&#x2F;时钟&#x2F;引脚，生成初始化代码 打开 robot.ioc 看工程配置   STM32CubeIDE 官方 IDE，编译 + 调试 + 下载一体 基于 Eclipse   ST-Link 驱动 让电脑识别 ST-Link 烧录器 买 ST-Link 时店家会给   串口工具 XCOM &#x2F; Sscom &#x2F; Serial Studio 看日志、发命令   VSCode（可选） 作者实际写代码的地方 只写不改配置，CubeIDE 当”工具人”    作者原话：“STM32CubeMX 用于硬件外设初始化，CubeIDE 我一般用来 DEBUG 和程序下载，敲代码我还是喜欢用 VSCode，那两...</div></div></div></a></div></div><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div class="vcomment" id="vcomment"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Xucheng95</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/xucheng95" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E8%81%94%E8%B0%83%E5%89%8D%E7%9A%84%E5%87%86%E5%A4%87"><span class="toc-text">1. 联调前的准备</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E5%91%BD%E4%BB%A4%E9%80%9F%E6%9F%A5%E8%A1%A8%EF%BC%88%E5%86%8D%E5%A4%8D%E4%B9%A0%E4%B8%80%E9%81%8D%EF%BC%89"><span class="toc-text">2. 命令速查表（再复习一遍）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E9%80%90%E6%9D%A1%E5%91%BD%E4%BB%A4%E5%AE%9E%E6%93%8D"><span class="toc-text">3. 逐条命令实操</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%85%88%E5%81%9A%E4%B8%80%E6%AC%A1%E7%A1%AC%E5%A4%8D%E4%BD%8D"><span class="toc-text">3.1 先做一次硬复位</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-rel-rotate%EF%BC%9A%E5%8D%95%E5%85%B3%E8%8A%82%E7%9B%B8%E5%AF%B9%E8%BD%AC%E5%8A%A8"><span class="toc-text">3.2 rel_rotate：单关节相对转动</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-zero%EF%BC%9A%E8%87%AA%E5%AE%9A%E4%B9%89%E9%9B%B6%E7%82%B9"><span class="toc-text">3.3 zero：自定义零点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E8%81%94%E8%B0%83%E6%A0%B8%E5%BF%83%E5%9D%91%E4%BD%8D%EF%BC%88%E6%8C%89%E5%87%BA%E7%8E%B0%E9%A2%91%E7%8E%87%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-text">4. 联调核心坑位（按出现频率排序）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-1%EF%BC%9A%E5%91%BD%E4%BB%A4%E6%B2%A1%E5%8F%8D%E5%BA%94%EF%BC%8C%E4%B8%B2%E5%8F%A3%E6%97%A0%E6%97%A5%E5%BF%97"><span class="toc-text">坑 1：命令没反应，串口无日志</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-2%EF%BC%9A%E8%BD%AC%E5%8A%A8%E6%96%B9%E5%90%91%E5%8F%8D%E4%BA%86"><span class="toc-text">坑 2：转动方向反了</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-3%EF%BC%9A%E8%A7%92%E5%BA%A6%E4%B8%8D%E5%87%86%EF%BC%88%E8%BD%AC-90%C2%B0-%E5%AE%9E%E9%99%85%E8%BD%AC-89%C2%B0%EF%BC%89"><span class="toc-text">坑 3：角度不准（转 90° 实际转 89°）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-4%EF%BC%9A%E6%9F%90%E4%B8%AA%E5%85%B3%E8%8A%82%E4%B8%8D%E5%8A%A8-%E4%B9%B1%E5%8A%A8"><span class="toc-text">坑 4：某个关节不动 &#x2F; 乱动</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-5%EF%BC%9A%E7%94%B5%E6%9C%BA%E5%A0%B5%E8%BD%AC%E4%BF%9D%E6%8A%A4"><span class="toc-text">坑 5：电机堵转保护</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9D%91-6%EF%BC%9A%E6%97%A5%E5%BF%97%E4%B9%B1%E7%A0%81"><span class="toc-text">坑 6：日志乱码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E4%B8%80%E4%B8%AA%E5%AE%8C%E6%95%B4%E7%9A%84%E8%81%94%E8%B0%83%E8%84%9A%E6%9C%AC%EF%BC%88%E7%85%A7%E7%9D%80%E5%8F%91%EF%BC%89"><span class="toc-text">5. 一个完整的联调脚本（照着发）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98"><span class="toc-text">6. 常见问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="toc-text">7. 本篇小结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E4%B8%8B%E4%B8%80%E7%AF%87%E9%A2%84%E5%91%8A"><span class="toc-text">8. 下一篇预告</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/" title="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）</a><time datetime="2026-08-19T22:40:00.000Z" title="发表于 2026-08-19 22:40:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-11-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6/" title="ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）">ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）</a><time datetime="2026-08-19T22:30:00.000Z" title="发表于 2026-08-19 22:30:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-10-%E6%95%B4%E6%9C%BA%E8%A3%85%E9%85%8D/" title="ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）">ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）</a><time datetime="2026-08-19T22:20:00.000Z" title="发表于 2026-08-19 22:20:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）">ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）</a><time datetime="2026-08-19T22:10:00.000Z" title="发表于 2026-08-19 22:10:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）</a><time datetime="2026-08-19T22:00:00.000Z" title="发表于 2026-08-19 22:00:00">2026-08-19</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2022 - 2026 By Xucheng95</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.7.0"></script><script src="/js/main.js?v=5.7.0"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = null
+
+  const initValine = (el, path) => {
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyValine = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+
+    const valineConfig = {
+      el: '#vcomment',
+      appId: 'dPE8NdWqLHIBK3b1UzDKzh1V-gzGzoHsz',
+      appKey: 'LVW5ij737ZzbbvgGPhZaSwtl',
+      avatar: 'monsterid',
+      serverURLs: '',
+      emojiMaps: "",
+      visitor: false,
+      ...option,
+      path: isShuoshuo ? path : (option && option.path) || window.location.pathname
+    }
+
+    new Valine(valineConfig)
+  }
+
+  const loadValine = async (el, path) => {
+    if (typeof Valine === 'function') {
+      initValine(el, path)
+    } else {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/valine@1.5.3/dist/Valine.min.js')
+      initValine(el, path)
+    }
+  }
+
+  if (isShuoshuo) {
+    'Valine' === 'Valine'
+      ? window.shuoshuoComment = { loadComment: loadValine }
+      : window.loadOtherComment = loadValine
+    return
+  }
+
+  if ('Valine' === 'Valine' || !false) {
+    if (false) btf.loadComment(document.getElementById('vcomment'),loadValine)
+    else setTimeout(loadValine, 0)
+  } else {
+    window.loadOtherComment = loadValine
+  }
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.7.0"></script></div></div></body></html>

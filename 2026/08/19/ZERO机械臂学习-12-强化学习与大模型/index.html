@@ -1,0 +1,429 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望） | Xucheng95's Blog</title><meta name="author" content="Xucheng95"><meta name="copyright" content="Xucheng95"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="这是「ZERO 机械臂学习之路」系列的最后一篇。前 11 篇学的是”人教机器怎么动”（运动学 + PID），这一篇看”机器自己学怎么动”：用 MuJoCo 物理仿真 + TD3 强化学习，让机械臂学会末端跟踪目标位置。最后聊聊大模型接入的展望，以及整个系列的沉淀。  1. 为什么要强化学习传统控制的思路（前 9 篇）：建数学模型 → 解方程 → 写控制律。但真实世界有摩擦、形变、噪声，模型永远不">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 &#x2F; MuJoCo &#x2F; 展望）">
+<meta property="og:url" content="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/index.html">
+<meta property="og:site_name" content="Xucheng95&#39;s Blog">
+<meta property="og:description" content="这是「ZERO 机械臂学习之路」系列的最后一篇。前 11 篇学的是”人教机器怎么动”（运动学 + PID），这一篇看”机器自己学怎么动”：用 MuJoCo 物理仿真 + TD3 强化学习，让机械臂学会末端跟踪目标位置。最后聊聊大模型接入的展望，以及整个系列的沉淀。  1. 为什么要强化学习传统控制的思路（前 9 篇）：建数学模型 → 解方程 → 写控制律。但真实世界有摩擦、形变、噪声，模型永远不">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://xucheng95.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-08-19T22:40:00.000Z">
+<meta property="article:modified_time" content="2026-08-21T09:51:45.221Z">
+<meta property="article:author" content="Xucheng95">
+<meta property="article:tag" content="MuJoCo">
+<meta property="article:tag" content="TD3">
+<meta property="article:tag" content="大模型">
+<meta property="article:tag" content="强化学习">
+<meta property="article:tag" content="机械臂">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://xucheng95.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）",
+  "url": "https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/",
+  "image": "https://xucheng95.github.io/img/avatar.jpg",
+  "datePublished": "2026-08-19T22:40:00.000Z",
+  "dateModified": "2026-08-21T09:51:45.221Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Xucheng95",
+      "url": "https://xucheng95.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.7.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"><link href="https://cdn.bootcss.com/KaTeX/0.11.1/katex.min.css" rel="stylesheet" /></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/homepage.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Xucheng95's Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-08-19T22:40:00.000Z" title="发表于 2026-08-19 22:40:00">2026-08-19</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-21T09:51:45.221Z" title="更新于 2026-08-21 09:51:45">2026-08-21</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82/">ZERO机械臂</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><blockquote>
+<p>这是「ZERO 机械臂学习之路」系列的<strong>最后一篇</strong>。前 11 篇学的是”人教机器怎么动”（运动学 + PID），这一篇看”机器自己学怎么动”：用 <strong>MuJoCo 物理仿真 + TD3 强化学习</strong>，让机械臂学会末端跟踪目标位置。最后聊聊大模型接入的展望，以及整个系列的沉淀。</p>
+</blockquote>
+<h2 id="1-为什么要强化学习"><a href="#1-为什么要强化学习" class="headerlink" title="1. 为什么要强化学习"></a>1. 为什么要强化学习</h2><p>传统控制的思路（前 9 篇）：<strong>建数学模型 → 解方程 → 写控制律</strong>。但真实世界有摩擦、形变、噪声，模型永远不完美；遇到”学会某个技能”这类问题，手工设计控制律越来越难。</p>
+<p><strong>强化学习（Reinforcement Learning, RL）<strong>换了个思路：不给指令，给</strong>奖励</strong>。智能体（机械臂）在环境里试错，做对了给正奖励、做错了给负奖励，最终自己摸索出策略——就像教小狗握手，做对了给零食。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">传统控制：目标 → 逆解/规划 → PID → 执行（人设计每一步）</span><br><span class="line">强化学习：目标 → 奖励函数 → 智能体不断试错 → 学到策略（机器自己找路径）</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-环境：MuJoCo-里的”虚拟机械臂”"><a href="#2-环境：MuJoCo-里的”虚拟机械臂”" class="headerlink" title="2. 环境：MuJoCo 里的”虚拟机械臂”"></a>2. 环境：MuJoCo 里的”虚拟机械臂”</h2><p>代码在 <code>5. Deep_LR/</code>，环境文件 <code>robot_arm_env.py</code>，用 <strong>MuJoCo</strong> 做物理引擎（<code>robot_arm_mujoco.xml</code> 定义了机械臂模型，几何数据直接来自真实 DH 参数和 STL 网格）。</p>
+<h3 id="状态空间：24-维"><a href="#状态空间：24-维" class="headerlink" title="状态空间：24 维"></a>状态空间：24 维</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 状态维度: 相对位置(3) + 关节角度(6) + 关节速度(6) + 上时刻扭矩(6) + 末端速度(3) = 24</span></span><br><span class="line">state = np.concatenate([</span><br><span class="line">    relative_pos,        <span class="comment"># 目标位置 - 末端当前位置 (3,)</span></span><br><span class="line">    joint_angles,        <span class="comment"># 6 个关节角度 (6,)</span></span><br><span class="line">    joint_velocities,    <span class="comment"># 6 个关节角速度 (6,)</span></span><br><span class="line">    previous_torques,    <span class="comment"># 上一时刻关节扭矩 (6,)</span></span><br><span class="line">    ee_vel               <span class="comment"># 末端速度 (3,)</span></span><br><span class="line">])</span><br></pre></td></tr></table></figure>
+
+<h3 id="动作空间：6-个关节扭矩"><a href="#动作空间：6-个关节扭矩" class="headerlink" title="动作空间：6 个关节扭矩"></a>动作空间：6 个关节扭矩</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable language_">self</span>.action_space = spaces.Box(low=-<span class="number">15.0</span>, high=<span class="number">15.0</span>, shape=(<span class="variable language_">self</span>.nu,), dtype=np.float32)</span><br></pre></td></tr></table></figure>
+
+<p><strong>注意</strong>：动作是<strong>扭矩</strong>（力），不是角度——智能体要从零学会”给多大劲”，比直接给目标角度难得多，也更接近真实电机控制。</p>
+<h3 id="目标：末端跟踪随机位置"><a href="#目标：末端跟踪随机位置" class="headerlink" title="目标：末端跟踪随机位置"></a>目标：末端跟踪随机位置</h3><p>每次 reset，目标位置随机生成（x∈[-0.2,0.2], y∈[-0.37,-0.17], z∈[0.2,0.4]），机械臂要在 3000 步内让末端到达目标 <strong>1mm 以内</strong>（<code>success_threshold = 0.01</code>）。</p>
+<h2 id="3-奖励设计：RL-的灵魂"><a href="#3-奖励设计：RL-的灵魂" class="headerlink" title="3. 奖励设计：RL 的灵魂"></a>3. 奖励设计：RL 的灵魂</h2><p>奖励函数（<code>step()</code> 里）决定智能体学成什么样，ZERO 的奖励设计值得逐条拆解：</p>
+<table>
+<thead>
+<tr>
+<th>奖励项</th>
+<th>数值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>时间惩罚</td>
+<td>每步 -0.1</td>
+<td>鼓励尽快完成，防止原地磨蹭</td>
+</tr>
+<tr>
+<td>距离改进奖励</td>
+<td>+1×(距离减少量)</td>
+<td>离目标越近给越多（鼓励进步）</td>
+</tr>
+<tr>
+<td>距离变差惩罚</td>
+<td>-0.8×(距离增加量)</td>
+<td>离目标越远罚越多（惩罚退步）</td>
+</tr>
+<tr>
+<td>基础距离惩罚</td>
+<td>$-0.8 \times \sqrt{distance}$</td>
+<td>常驻惩罚，越远罚越狠</td>
+</tr>
+<tr>
+<td>阶段性奖励（7 档）</td>
+<td>100→2000</td>
+<td>跨越 0.5m&#x2F;0.3m&#x2F;…&#x2F;2mm 阈值时一次性奖励</td>
+</tr>
+<tr>
+<td>方向奖励</td>
+<td>$\max(0, \cos\theta)^2$</td>
+<td>朝目标方向动给奖励</td>
+</tr>
+<tr>
+<td>速度惩罚</td>
+<td>末端速度 &gt;0.5 时 -0.2</td>
+<td>防止乱甩</td>
+</tr>
+<tr>
+<td>关节速度突变惩罚</td>
+<td>-0.03×Σ|Δv|</td>
+<td>抑制抖动&#x2F;失控</td>
+</tr>
+<tr>
+<td>碰撞惩罚</td>
+<td><strong>-5000</strong> 且终止回合</td>
+<td>强烈禁止碰撞（防自杀）</td>
+</tr>
+<tr>
+<td>成功奖励</td>
+<td><strong>+10000</strong> + 剩余步数×4 + 速度奖励</td>
+<td>达成 1mm 精度</td>
+</tr>
+</tbody></table>
+<p>设计要点：</p>
+<ul>
+<li><strong>稀疏 vs 稠密</strong>：如果只在成功时给奖励（稀疏），3000 步内几乎学不到东西；ZERO 用”距离改进 + 阶段奖励”把信号变<strong>稠密</strong>，每一步都有反馈</li>
+<li><strong>阶段奖励</strong>（100&#x2F;200&#x2F;300&#x2F;500&#x2F;1000&#x2F;1500&#x2F;2000）是梯度引导：每跨过一个阈值给一大笔，像游戏里的”里程碑”，比纯距离惩罚学得快</li>
+<li><strong>防自杀</strong>：碰撞 -5000 并终止，同时扣掉剩余步数惩罚——避免智能体发现”撞了就不扣时间罚”而故意撞墙</li>
+</ul>
+<h2 id="4-算法：TD3（Twin-Delayed-DDPG）"><a href="#4-算法：TD3（Twin-Delayed-DDPG）" class="headerlink" title="4. 算法：TD3（Twin Delayed DDPG）"></a>4. 算法：TD3（Twin Delayed DDPG）</h2><h3 id="为什么是-TD3"><a href="#为什么是-TD3" class="headerlink" title="为什么是 TD3"></a>为什么是 TD3</h3><p>机械臂控制是<strong>连续动作</strong>（扭矩是连续值），不能用 DQN 这类离散动作算法。TD3 是连续控制的主流算法之一，它修掉了 DDPG 的三个经典问题：</p>
+<ol>
+<li><strong>双 Q 网络</strong>：取两个 Q 的最小值，抑制过估计</li>
+<li><strong>延迟更新</strong>：Actor（策略）更新频率慢于 Critic（价值），更稳定</li>
+<li><strong>目标策略平滑</strong>：给目标动作加噪声，防止对尖峰过拟合</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Actor（策略网络）: 状态 → 动作     π(s) = a</span><br><span class="line">Critic（价值网络）: (状态, 动作) → Q 值  Q(s,a) = 期望回报</span><br></pre></td></tr></table></figure>
+
+<h3 id="训练配置（train-robot-arm-py）"><a href="#训练配置（train-robot-arm-py）" class="headerlink" title="训练配置（train_robot_arm.py）"></a>训练配置（train_robot_arm.py）</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">model = TD3(</span><br><span class="line">    <span class="string">&quot;MlpPolicy&quot;</span>, env,</span><br><span class="line">    action_noise=NormalActionNoise(mean=<span class="number">0</span>, sigma=<span class="number">2.5</span>),  <span class="comment"># 探索噪声</span></span><br><span class="line">    learning_rate=<span class="number">3e-4</span>,</span><br><span class="line">    buffer_size=<span class="number">3000000</span>,        <span class="comment"># 经验回放池</span></span><br><span class="line">    learning_starts=<span class="number">10000</span>,      <span class="comment"># 先随机探索 1 万步</span></span><br><span class="line">    batch_size=<span class="number">256</span>,</span><br><span class="line">    tau=<span class="number">0.005</span>,                  <span class="comment"># 目标网络软更新</span></span><br><span class="line">    gamma=<span class="number">0.99</span>,                 <span class="comment"># 折扣因子</span></span><br><span class="line">    policy_delay=<span class="number">4</span>,             <span class="comment"># Actor 每 4 步更新一次</span></span><br><span class="line">    target_policy_noise=<span class="number">0.2</span>,    <span class="comment"># 目标策略平滑噪声</span></span><br><span class="line">    target_noise_clip=<span class="number">0.5</span>,</span><br><span class="line">    policy_kwargs=<span class="built_in">dict</span>(net_arch=<span class="built_in">dict</span>(pi=[<span class="number">512</span>,<span class="number">512</span>,<span class="number">256</span>], qf=[<span class="number">512</span>,<span class="number">512</span>,<span class="number">256</span>])),</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>网络结构：Actor 和 Critic 都是 <strong>512→512→256</strong> 的全连接，ReLU 激活</li>
+<li>训练步数：<code>total_timesteps=5000000</code>（500 万步，需要 GPU 跑几小时到一天）</li>
+<li>环境用 <code>make_vec_env</code> + <code>VecNormalize</code> 做向量化与观测&#x2F;奖励归一化</li>
+</ul>
+<h3 id="训练与测试命令"><a href="#训练与测试命令" class="headerlink" title="训练与测试命令"></a>训练与测试命令</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 训练</span></span><br><span class="line">python train_robot_arm.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># 测试（加载最佳模型，渲染 50 个回合）</span></span><br><span class="line">python train_robot_arm.py --<span class="built_in">test</span> --model-path ./logs/best_model/best_model.zip \</span><br><span class="line">    --normalize-path ./logs/best_model/vec_normalize.pkl --episodes 50</span><br></pre></td></tr></table></figure>
+
+<p>仓库里还带了一个<strong>手写版 TD3</strong>（<code>mtd3_robot_arm.ipynb</code>）——作者自己裸写的算法，没怎么验证过（作者原话：”没验证过哦~, 但我感觉应该没啥问题”）。<strong>强烈建议读它</strong>：看别人用 Stable-Baselines3 是”会用”，读裸写实现才是”真懂”。</p>
+<h2 id="5-从仿真到真机（Sim2Real）"><a href="#5-从仿真到真机（Sim2Real）" class="headerlink" title="5. 从仿真到真机（Sim2Real）"></a>5. 从仿真到真机（Sim2Real）</h2><p>仿真里学到的策略，直接放到真机上通常<strong>跑不起来</strong>——这就是著名的 <strong>Sim2Real 差距</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>差距来源</th>
+<th>仿真</th>
+<th>真机</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>动力学</td>
+<td>MuJoCo 模型近似</td>
+<td>摩擦&#x2F;旷量&#x2F;形变，且随温度负载变化</td>
+</tr>
+<tr>
+<td>状态</td>
+<td>完美观测</td>
+<td>编码器有噪声、延迟</td>
+</tr>
+<tr>
+<td>执行</td>
+<td>扭矩直接生效</td>
+<td>张大头闭环驱动器有自己的响应特性</td>
+</tr>
+<tr>
+<td>安全</td>
+<td>随便试错</td>
+<td>撞坏结构、烧电机</td>
+</tr>
+</tbody></table>
+<p>ZERO 的强化学习是**”第一步”<strong>：它在仿真里证明了”机械臂能用 RL 学会跟踪目标”，但离真机部署还有距离。真机落地通常的做法：<strong>域随机化</strong>（训练时随机化仿真参数）、<strong>先在仿真验证 → 小范围真机微调</strong>、或用真机数据</strong>离线强化学习**。</p>
+<blockquote>
+<p>这也是这条学习路线的价值：<strong>同一个项目里，你同时看到”经典控制”（前 9 篇）和”学习控制”（本篇）两条路线</strong>——它们不是替代关系，而是互补：运动学&#x2F;PID 给你可靠的底层，RL 给你应对复杂任务的灵活性。</p>
+</blockquote>
+<h2 id="6-展望：大模型与具身智能"><a href="#6-展望：大模型与具身智能" class="headerlink" title="6. 展望：大模型与具身智能"></a>6. 展望：大模型与具身智能</h2><p>README 里作者列了一串未完成计划：<strong>WEB 可视化平台、语音识别、语音合成、大模型接入</strong>。这些在今天已经有了很成熟的玩法：</p>
+<ul>
+<li><strong>大模型当”大脑”</strong>：LLM 理解自然语言指令（”把手机放到左边”）→ 拆解成 <code>auto x y z</code> 命令 → 发给机械臂</li>
+<li><strong>视觉大模型当”眼睛”</strong>：VLM 识别物体位置 → 得到坐标 → 机械臂抓取</li>
+<li><strong>遥操作 + 数据收集</strong>：手柄&#x2F;VR 遥控机械臂做任务（第 11 篇的手柄就是个雏形），采集数据训练策略——这正是 LeRobot 等项目的路线</li>
+<li><strong>第二代 ZYArm-X1</strong>：作者的新一代机械臂（6+1 轴、总线舵机）配套了 ROS 2 &#x2F; MoveIt &#x2F; LeRobot 全套开源生态，就是从”学习”走向”做产品&#x2F;研究平台”的升级</li>
+</ul>
+<h2 id="7-系列完结：回顾与沉淀"><a href="#7-系列完结：回顾与沉淀" class="headerlink" title="7. 系列完结：回顾与沉淀"></a>7. 系列完结：回顾与沉淀</h2><p>回顾整个「ZERO 机械臂学习之路」，12 篇正好对应一个完整的机器人知识闭环：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">01 总览 ── 02 运动学基础</span><br><span class="line">03 BOM ── 04 电机与传动 ── 10 装配          （身体）</span><br><span class="line">05 主控与通讯 ── 06 工具链                  （大脑与神经）</span><br><span class="line">07 复位 ── 08 串口联调 ── 09 运动学联调      （让它动起来）</span><br><span class="line">11 远程控制 ── 12 强化学习与大模型           （进阶与展望）</span><br></pre></td></tr></table></figure>
+
+<p>按第 01 篇的路线图，最后两周是<strong>沉淀阶段</strong>：把笔记整理成自己的知识体系。建议：</p>
+<ol>
+<li><strong>回读代码</strong>：这次带着全系列的知识，把 <code>robot.c</code>、<code>robot_kinematics.c</code>、<code>Emm_V5.c</code> 通读一遍——你会发现大部分代码现在都看得懂了</li>
+<li><strong>复现实验</strong>：把第 02 篇的 Python 正运动学、第 12 篇的 MuJoCo 训练自己跑一遍</li>
+<li><strong>选一个开放作业</strong>：打通 MQTT（第 11 篇）、或实现”逆解 + RL 混合控制”、或给机械臂接一个大模型——这些都是能写进简历的项目</li>
+<li><strong>输出</strong>：像 ZERO 作者一样，把你的踩坑记录、改进方案开源分享——<strong>学习最好的方式就是教别人</strong></li>
+</ol>
+<p>从一台 1300 元的桌面机械臂，到嵌入式、CAN 总线、运动学、PID、强化学习、大模型——这条线走完，你就有了机器人领域的地图。剩下的，就是沿着地图继续探索了。<strong>祝学习愉快，一起从零到一！</strong></p>
+<h2 id="8-相关资源"><a href="#8-相关资源" class="headerlink" title="8. 相关资源"></a>8. 相关资源</h2><ul>
+<li>开源仓库：<a target="_blank" rel="noopener" href="https://gitee.com/dearxie/zero-robotic-arm">https://gitee.com/dearxie/zero-robotic-arm</a></li>
+<li>作者 B 站视频：【开源】为了跟上大佬们的步伐，我决定从零到一做个智能机械臂</li>
+<li>第二代 ZYArm-X1：<a target="_blank" rel="noopener" href="https://github.com/ZYAI-Robot/ZYArm-X1">https://github.com/ZYAI-Robot/ZYArm-X1</a>（ROS 2 &#x2F; MoveIt &#x2F; LeRobot 全栈开源）</li>
+<li>学习资料：Stable-Baselines3 文档（TD3）、MuJoCo 文档、LeRobot 项目</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io">Xucheng95</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/">https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://xucheng95.github.io" target="_blank">Xucheng95's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%9C%BA%E6%A2%B0%E8%87%82/">机械臂</a><a class="post-meta__tags" href="/tags/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">强化学习</a><a class="post-meta__tags" href="/tags/TD3/">TD3</a><a class="post-meta__tags" href="/tags/MuJoCo/">MuJoCo</a><a class="post-meta__tags" href="/tags/%E5%A4%A7%E6%A8%A1%E5%9E%8B/">大模型</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-11-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6/" title="ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 11 篇。进阶阶段第一篇：让机械臂脱离电脑的串口线——先用游戏手柄遥控（作者已实现），再摸清 MQTT 远程控制的实现与现状（半成品，正好是开放的练手项目）。里程碑：远程控制打通。  1. 两种远程控制路径   方式 实现状态 原理 本篇    游戏手柄遥控 ✅ 已实现 电脑跑 Python 脚本，读手柄 → 串口发命令 第 2 节   MQTT 网络远程 ⚠️ 半成品 ESP8266 WiFi 模块接 MQTT 服务器，手机&#x2F;网页发指令 第 3、4 节   2. 手柄遥控：robot_joystick.py仓库根目录有个 robot_joystick.py——上位机脚本（跑在电脑上，不是单片机里）。 工作流程1游戏手柄(USB) → pygame 读轴 → serial 串口发命令 → STM32 解析 → 机械臂运动  关键代码123456789101112131415161718# robot_joystick.pyimport pygameimport serial# 连接手柄（第一个手柄）joystick = pyg...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-02-%E6%9C%BA%E5%99%A8%E4%BA%BA%E5%9F%BA%E7%A1%80%E6%A6%82%E5%BF%B5/" title="ZERO 机械臂学习之路 02：机器人基础概念（自由度&#x2F;坐标系&#x2F;正逆运动学）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 02：机器人基础概念（自由度&#x2F;坐标系&#x2F;正逆运动学）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 02 篇。本篇用程序员的直觉讲清楚机器人学最核心的三个概念：自由度、坐标系变换、正逆运动学。读完你就能看懂 robot_kinematics.c 在算什么。不需要任何数学基础，所有公式都有”人话版”解释。  1. 自由度（DOF）：机器人有多少个”能动的关节”人话版自由度 &#x3D; 机器人能独立运动的关节数量。ZERO 有 6 个旋转关节，所以是 6 自由度（6-DOF）机械臂。 你可以把每个关节想象成你的胳膊：    你的身体 机械臂 自由度    肩膀（可转） 关节 1、2、3 3   肘部 关节 4 1   手腕 关节 5、6 2   合计  6   为什么是 6？因为在三维空间中，要让末端（抓手）到达任意位置并摆出任意姿态，正好需要 6 个独立量：  位置：x、y、z（3 个量） 姿态：绕 x&#x2F;y&#x2F;z 轴的角度（3 个量）  3 + 3 &#x3D; 6，所以 6 自由度是”完整”的机械臂。少于 6 只能到特定位置，多于 6（如人形机器人）是冗余——同一个位置有多种关节摆法。 在代码里1#define R...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-06-%E5%B5%8C%E5%85%A5%E5%BC%8F%E5%B7%A5%E5%85%B7%E9%93%BE/" title="ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 06 篇。上一篇认识了主控和通讯，这一篇把”编译烧录”这条工具链打通：装什么软件、工程目录是什么结构、怎么编译、怎么烧录、怎么用串口日志调试。里程碑：看到串口里出现 robot control task runing!!!。  1. 需要安装的软件清单   软件 作用 备注    STM32CubeMX 图形化配置外设&#x2F;时钟&#x2F;引脚，生成初始化代码 打开 robot.ioc 看工程配置   STM32CubeIDE 官方 IDE，编译 + 调试 + 下载一体 基于 Eclipse   ST-Link 驱动 让电脑识别 ST-Link 烧录器 买 ST-Link 时店家会给   串口工具 XCOM &#x2F; Sscom &#x2F; Serial Studio 看日志、发命令   VSCode（可选） 作者实际写代码的地方 只写不改配置，CubeIDE 当”工具人”    作者原话：“STM32CubeMX 用于硬件外设初始化，CubeIDE 我一般用来 DEBUG 和程序下载，敲代码我还是喜欢用 VSCode，那两...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-01-%E9%A1%B9%E7%9B%AE%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF/" title="ZERO 机械臂学习之路 01：项目总览与学习路线"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 01：项目总览与学习路线</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 01 篇。本系列以一个真实开源项目——零一造物 ZERO 机械臂为教材，从零开始掌握机器人技术并完整复刻一台机械臂。目标读者：有编程经验、没碰过硬件的新手。  1. 这个项目是什么ZERO 机械臂是 B 站 UP 主「零一造物」开源的一台桌面级六轴机械臂，主打高性价比（整套物料约 1300 元）和学习导向——把机器人领域的核心知识串起来：结构设计 → 运动学 → 控制 → 强化学习 → 大模型。 开源仓库内容一览：    目录 内容 你要学的    1. Model SolidWorks 三维模型 + 3D 打印件 结构设计、装配   2. Software/robot STM32 嵌入式控制代码（C + FreeRTOS） 嵌入式、控制   3. Simulink MATLAB 运动学推导与仿真 运动学、仿真   4. Other 图片资料 —   5. Deep_LR 强化学习（MuJoCo + TD3） 强化学习   BOM.xlsx 完整物料清单（含购买链接） 采购   2. 为什么用它当教材作为新手，选学习项目最怕两件事：代码...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto &#x2F; 坐标系 &#x2F; 路径插值）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 09：运动学联调（auto &#x2F; 坐标系 &#x2F; 路径插值）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 09 篇。第 02 篇学了理论（正逆运动学），这一篇看它们在真机上是怎样协作的：发一条 auto x y z，机械臂从”会转”到”末端自动到位”。里程碑：末端按指令到达指定位置。  1. auto 命令：一句话让末端动起来1auto 0 0 200  意思是：让末端移动到 (x=0, y=0, z=200) 的位置（单位 mm）。注意 README 里的提醒：注意坐标方向。 代码路径（robot_cmd.c → robot_control_task）： 12345&quot;auto x y z&quot; → robot_auto_handle() → robot_send_auto_event()    ↓event_queue → robot_control_task → ROBOT_AUTO_EVENT 分支    ↓robot_auto_move_interpolation()   ← ★ 本篇主角  2. auto 背后的四步流水线robot_auto_move_interpolation()（robot.c）完整地串起了第...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-10-%E6%95%B4%E6%9C%BA%E8%A3%85%E9%85%8D/" title="ZERO 机械臂学习之路 10：整机装配（3D 打印件 &#x2F; 装配顺序 &#x2F; 走线）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 10：整机装配（3D 打印件 &#x2F; 装配顺序 &#x2F; 走线）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 10 篇。按路线图，装配篇在这里补齐：零件到手后怎么一步步装成一台能动的机械臂。里程碑：整机装完，结构稳固、走线整洁、能上电复位。  1. 装配前：你需要的东西3D 打印件（BOM 之外，必须代打或自打）：  文件：1. Model/3d_printing_all.3mf（一个文件包含全部打印件） 材料：PLA，提醒店家”高精度”（公差直接影响装配顺滑度） 参考价：50~100 元  工具清单：    工具 用途    电烙铁 压热熔螺母（必买）   内六角扳手套装 拧 M3&#x2F;M4&#x2F;M5 螺丝   十字螺丝刀 扁平头螺丝   尖嘴钳 辅助装配   扎带&#x2F;理线器 走线固定   零件核对：对照第 03 篇的采购 Checklist 清点——6 台电机（42×3 + 35×3）、行星减速器（51:1×2 + 27:1×1）、张大头驱动器×6 + 拓展板、STM32F407、同步轮×6、同步带×3、联轴器×5、圆锥滚子轴承×1、限位开关×5、全部螺丝&#x2F;热熔螺母×10。 2. 装配顺序：从下往上，先骨架后动...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/" title="ZERO 机械臂学习之路 05：主控与通讯（STM32 &#x2F; CAN 总线 &#x2F; 串口）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 05：主控与通讯（STM32 &#x2F; CAN 总线 &#x2F; 串口）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 05 篇。上一篇讲完了”肌肉”（电机与传动），这一篇讲”大脑”和”神经”：主控 STM32 怎么调度任务、串口怎么收你的命令、CAN 总线怎么跟 6 个电机对话。读完你会对整个 robot 工程的启动流程和消息流转有完整认识。  1. 主控：STM32F407VET6整台机械臂的”大脑”是一块 STM32F407VET6 开发板（BOM 第 3 项）。为什么是它：  Cortex-M4F 内核，168MHz，带硬件浮点单元——跑运动学逆解的那堆三角函数和矩阵运算没问题 自带 CAN 控制器（关键外设！）——连接张大头驱动器全靠它 资源足够跑 FreeRTOS + 运动学计算 + 串口&#x2F;网络协议，还有富余  从 robot.ioc（CubeMX 工程文件）可以看到用到的外设：    外设 引脚 用途    CAN1 PB8 &#x2F; PB9 连接 6 个张大头驱动器（CAN 总线）   USART1 — 串口命令输入（电脑 ↔ 主控，115200）   USART3 — 接 ESP8266 WiFi 模块（MQTT 远程，默...</div></div></div></a></div></div><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div class="vcomment" id="vcomment"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Xucheng95</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/xucheng95" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0"><span class="toc-text">1. 为什么要强化学习</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%8E%AF%E5%A2%83%EF%BC%9AMuJoCo-%E9%87%8C%E7%9A%84%E2%80%9D%E8%99%9A%E6%8B%9F%E6%9C%BA%E6%A2%B0%E8%87%82%E2%80%9D"><span class="toc-text">2. 环境：MuJoCo 里的”虚拟机械臂”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8A%B6%E6%80%81%E7%A9%BA%E9%97%B4%EF%BC%9A24-%E7%BB%B4"><span class="toc-text">状态空间：24 维</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A8%E4%BD%9C%E7%A9%BA%E9%97%B4%EF%BC%9A6-%E4%B8%AA%E5%85%B3%E8%8A%82%E6%89%AD%E7%9F%A9"><span class="toc-text">动作空间：6 个关节扭矩</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%AE%E6%A0%87%EF%BC%9A%E6%9C%AB%E7%AB%AF%E8%B7%9F%E8%B8%AA%E9%9A%8F%E6%9C%BA%E4%BD%8D%E7%BD%AE"><span class="toc-text">目标：末端跟踪随机位置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E5%A5%96%E5%8A%B1%E8%AE%BE%E8%AE%A1%EF%BC%9ARL-%E7%9A%84%E7%81%B5%E9%AD%82"><span class="toc-text">3. 奖励设计：RL 的灵魂</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%AE%97%E6%B3%95%EF%BC%9ATD3%EF%BC%88Twin-Delayed-DDPG%EF%BC%89"><span class="toc-text">4. 算法：TD3（Twin Delayed DDPG）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-TD3"><span class="toc-text">为什么是 TD3</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E9%85%8D%E7%BD%AE%EF%BC%88train-robot-arm-py%EF%BC%89"><span class="toc-text">训练配置（train_robot_arm.py）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E4%B8%8E%E6%B5%8B%E8%AF%95%E5%91%BD%E4%BB%A4"><span class="toc-text">训练与测试命令</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E4%BB%8E%E4%BB%BF%E7%9C%9F%E5%88%B0%E7%9C%9F%E6%9C%BA%EF%BC%88Sim2Real%EF%BC%89"><span class="toc-text">5. 从仿真到真机（Sim2Real）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%B1%95%E6%9C%9B%EF%BC%9A%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD"><span class="toc-text">6. 展望：大模型与具身智能</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E7%B3%BB%E5%88%97%E5%AE%8C%E7%BB%93%EF%BC%9A%E5%9B%9E%E9%A1%BE%E4%B8%8E%E6%B2%89%E6%B7%80"><span class="toc-text">7. 系列完结：回顾与沉淀</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%9B%B8%E5%85%B3%E8%B5%84%E6%BA%90"><span class="toc-text">8. 相关资源</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/" title="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）</a><time datetime="2026-08-19T22:40:00.000Z" title="发表于 2026-08-19 22:40:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-11-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6/" title="ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）">ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）</a><time datetime="2026-08-19T22:30:00.000Z" title="发表于 2026-08-19 22:30:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-10-%E6%95%B4%E6%9C%BA%E8%A3%85%E9%85%8D/" title="ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）">ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）</a><time datetime="2026-08-19T22:20:00.000Z" title="发表于 2026-08-19 22:20:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）">ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）</a><time datetime="2026-08-19T22:10:00.000Z" title="发表于 2026-08-19 22:10:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）</a><time datetime="2026-08-19T22:00:00.000Z" title="发表于 2026-08-19 22:00:00">2026-08-19</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2022 - 2026 By Xucheng95</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.7.0"></script><script src="/js/main.js?v=5.7.0"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = null
+
+  const initValine = (el, path) => {
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyValine = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+
+    const valineConfig = {
+      el: '#vcomment',
+      appId: 'dPE8NdWqLHIBK3b1UzDKzh1V-gzGzoHsz',
+      appKey: 'LVW5ij737ZzbbvgGPhZaSwtl',
+      avatar: 'monsterid',
+      serverURLs: '',
+      emojiMaps: "",
+      visitor: false,
+      ...option,
+      path: isShuoshuo ? path : (option && option.path) || window.location.pathname
+    }
+
+    new Valine(valineConfig)
+  }
+
+  const loadValine = async (el, path) => {
+    if (typeof Valine === 'function') {
+      initValine(el, path)
+    } else {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/valine@1.5.3/dist/Valine.min.js')
+      initValine(el, path)
+    }
+  }
+
+  if (isShuoshuo) {
+    'Valine' === 'Valine'
+      ? window.shuoshuoComment = { loadComment: loadValine }
+      : window.loadOtherComment = loadValine
+    return
+  }
+
+  if ('Valine' === 'Valine' || !false) {
+    if (false) btf.loadComment(document.getElementById('vcomment'),loadValine)
+    else setTimeout(loadValine, 0)
+  } else {
+    window.loadOtherComment = loadValine
+  }
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.7.0"></script></div></div></body></html>

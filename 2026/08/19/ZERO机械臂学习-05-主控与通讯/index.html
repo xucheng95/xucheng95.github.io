@@ -1,0 +1,452 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ZERO 机械臂学习之路 05：主控与通讯（STM32 / CAN 总线 / 串口） | Xucheng95's Blog</title><meta name="author" content="Xucheng95"><meta name="copyright" content="Xucheng95"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="这是「ZERO 机械臂学习之路」系列的第 05 篇。上一篇讲完了”肌肉”（电机与传动），这一篇讲”大脑”和”神经”：主控 STM32 怎么调度任务、串口怎么收你的命令、CAN 总线怎么跟 6 个电机对话。读完你会对整个 robot 工程的启动流程和消息流转有完整认识。  1. 主控：STM32F407VET6整台机械臂的”大脑”是一块 STM32F407VET6 开发板（BOM 第 3 项）。为">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZERO 机械臂学习之路 05：主控与通讯（STM32 &#x2F; CAN 总线 &#x2F; 串口）">
+<meta property="og:url" content="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/index.html">
+<meta property="og:site_name" content="Xucheng95&#39;s Blog">
+<meta property="og:description" content="这是「ZERO 机械臂学习之路」系列的第 05 篇。上一篇讲完了”肌肉”（电机与传动），这一篇讲”大脑”和”神经”：主控 STM32 怎么调度任务、串口怎么收你的命令、CAN 总线怎么跟 6 个电机对话。读完你会对整个 robot 工程的启动流程和消息流转有完整认识。  1. 主控：STM32F407VET6整台机械臂的”大脑”是一块 STM32F407VET6 开发板（BOM 第 3 项）。为">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://xucheng95.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-08-19T21:30:00.000Z">
+<meta property="article:modified_time" content="2026-08-21T09:49:33.475Z">
+<meta property="article:author" content="Xucheng95">
+<meta property="article:tag" content="CAN总线">
+<meta property="article:tag" content="STM32">
+<meta property="article:tag" content="串口">
+<meta property="article:tag" content="机械臂">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://xucheng95.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ZERO 机械臂学习之路 05：主控与通讯（STM32 / CAN 总线 / 串口）",
+  "url": "https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/",
+  "image": "https://xucheng95.github.io/img/avatar.jpg",
+  "datePublished": "2026-08-19T21:30:00.000Z",
+  "dateModified": "2026-08-21T09:49:33.475Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Xucheng95",
+      "url": "https://xucheng95.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.7.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        const data = { value }
+
+        if (ttl != null) {
+          data.expiry = Date.now() + ttl * 86400000
+        }
+
+        localStorage.setItem(key, JSON.stringify(data))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return
+
+        try {
+          const data = JSON.parse(itemStr)
+
+          if (data.expiry && Date.now() > data.expiry) {
+            localStorage.removeItem(key)
+            return
+          }
+
+          return data.value
+        } catch {
+          localStorage.removeItem(key)
+        }
+      }
+    }
+
+    const scriptCache = new Map()
+    const cssCache = new Map()
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => {
+        if (scriptCache.has(url)) {
+          return scriptCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+
+          script.src = url
+          script.async = true
+
+          for (const key in attr) {
+            script.setAttribute(key, attr[key])
+          }
+
+          script.onload = resolve
+          script.onerror = reject
+
+          document.head.appendChild(script)
+        })
+
+        scriptCache.set(url, promise)
+
+        return promise
+      },
+      getCSS: (url, id) => {
+        if (cssCache.has(url)) {
+          return cssCache.get(url)
+        }
+
+        const promise = new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+
+          link.rel = 'stylesheet'
+          link.href = url
+
+          if (id) {
+            link.id = id
+          }
+
+          link.onload = resolve
+          link.onerror = reject
+
+          document.head.appendChild(link)
+        })
+
+        cssCache.set(url, promise)
+
+        return promise
+      },
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+      const activateDarkMode = () => {
+        document.documentElement.dataset.theme = 'dark'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.dataset.theme = 'light'
+        if (metaThemeColor !== null) {
+          metaThemeColor.setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ZERO 机械臂学习之路 05：主控与通讯（STM32 / CAN 总线 / 串口）',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"><link href="https://cdn.bootcss.com/KaTeX/0.11.1/katex.min.css" rel="stylesheet" /></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/homepage.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Xucheng95's Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">ZERO 机械臂学习之路 05：主控与通讯（STM32 / CAN 总线 / 串口）</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ZERO 机械臂学习之路 05：主控与通讯（STM32 / CAN 总线 / 串口）</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-08-19T21:30:00.000Z" title="发表于 2026-08-19 21:30:00">2026-08-19</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-21T09:49:33.475Z" title="更新于 2026-08-21 09:49:33">2026-08-21</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82/">ZERO机械臂</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><blockquote>
+<p>这是「ZERO 机械臂学习之路」系列的第 05 篇。上一篇讲完了”肌肉”（电机与传动），这一篇讲”大脑”和”神经”：主控 STM32 怎么调度任务、串口怎么收你的命令、CAN 总线怎么跟 6 个电机对话。读完你会对整个 <code>robot</code> 工程的启动流程和消息流转有完整认识。</p>
+</blockquote>
+<h2 id="1-主控：STM32F407VET6"><a href="#1-主控：STM32F407VET6" class="headerlink" title="1. 主控：STM32F407VET6"></a>1. 主控：STM32F407VET6</h2><p>整台机械臂的”大脑”是一块 <strong>STM32F407VET6</strong> 开发板（BOM 第 3 项）。为什么是它：</p>
+<ul>
+<li><strong>Cortex-M4F 内核</strong>，168MHz，带硬件浮点单元——跑运动学逆解的那堆三角函数和矩阵运算没问题</li>
+<li><strong>自带 CAN 控制器</strong>（关键外设！）——连接张大头驱动器全靠它</li>
+<li>资源足够跑 <strong>FreeRTOS + 运动学计算 + 串口&#x2F;网络协议</strong>，还有富余</li>
+</ul>
+<p>从 <code>robot.ioc</code>（CubeMX 工程文件）可以看到用到的外设：</p>
+<table>
+<thead>
+<tr>
+<th>外设</th>
+<th>引脚</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CAN1</td>
+<td>PB8 &#x2F; PB9</td>
+<td>连接 6 个张大头驱动器（CAN 总线）</td>
+</tr>
+<tr>
+<td>USART1</td>
+<td>—</td>
+<td>串口命令输入（电脑 ↔ 主控，115200）</td>
+</tr>
+<tr>
+<td>USART3</td>
+<td>—</td>
+<td>接 ESP8266 WiFi 模块（MQTT 远程，默认关闭）</td>
+</tr>
+<tr>
+<td>GPIO（EXTI 中断）</td>
+<td>PD0 ~ PD5</td>
+<td>6 个关节的限位开关输入</td>
+</tr>
+<tr>
+<td>RNG</td>
+<td>—</td>
+<td>硬件随机数（给 FreeRTOS 用）</td>
+</tr>
+<tr>
+<td>DMA</td>
+<td>USART3 RX</td>
+<td>串口 DMA 传输</td>
+</tr>
+</tbody></table>
+<h2 id="2-上电后发生了什么：启动流程"><a href="#2-上电后发生了什么：启动流程" class="headerlink" title="2. 上电后发生了什么：启动流程"></a>2. 上电后发生了什么：启动流程</h2><p>代码从 <code>Core/Src/main.c</code> 开始，一步步走到你的机械臂”活”起来：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">main()</span><br><span class="line"> ├─ HAL_Init()               ← HAL 库初始化</span><br><span class="line"> ├─ SystemClock_Config()     ← 配置时钟（168MHz）</span><br><span class="line"> ├─ MX_GPIO_Init()           ← GPIO：限位开关引脚、LED 等</span><br><span class="line"> ├─ MX_DMA_Init()            ← DMA</span><br><span class="line"> ├─ MX_CAN1_Init()           ← CAN 控制器（波特率、过滤器）</span><br><span class="line"> ├─ MX_RNG_Init()            ← 随机数</span><br><span class="line"> ├─ MX_USART1_UART_Init()    ← 串口1（命令口）</span><br><span class="line"> ├─ MX_USART3_UART_Init()    ← 串口3（WiFi 口）</span><br><span class="line"> ├─ MX_FREERTOS_Init()       ← FreeRTOS 内核初始化</span><br><span class="line"> ├─ osKernelStart()          ← 启动调度器！</span><br><span class="line"> └─ StartDefaultTask（第一个任务）</span><br><span class="line">     └─ robot_init()         ← 创建机器人的核心任务和队列</span><br></pre></td></tr></table></figure>
+
+<p><code>robot_init()</code>（<code>robot.c</code>）做的事很清晰：</p>
+<ol>
+<li>把 <code>g_joints_init</code>（关节配置表）和 <code>T_0_6_reset</code>（复位姿态矩阵）拷贝进全局结构体</li>
+<li>创建 <strong>事件队列</strong> <code>event_queue</code>（容量 20，<code>ROBOT_MAX_EVENT_NUM</code>）</li>
+<li>创建 <strong>命令队列</strong> <code>cmd_queue</code>（容量 50，<code>ROBOT_CMD_MAX_NUM</code>）</li>
+<li>创建两个任务：<code>robot_control_task</code>（实时优先级 3）和 <code>robot_cmd_service</code>（优先级 2）</li>
+</ol>
+<h2 id="3-FreeRTOS-任务架构：两个队列-两个任务"><a href="#3-FreeRTOS-任务架构：两个队列-两个任务" class="headerlink" title="3. FreeRTOS 任务架构：两个队列 + 两个任务"></a>3. FreeRTOS 任务架构：两个队列 + 两个任务</h2><p>整个软件就是<strong>事件驱动</strong>：任何输入（串口命令、限位开关、手柄、MQTT）都变成一条消息，扔进队列，由对应任务处理：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">             ┌──────────────────────────────┐</span><br><span class="line">串口/USART1 ─┤                              │</span><br><span class="line">手柄/MQTT ───┤→ cmd_queue（命令字符串）      │</span><br><span class="line">             │        ↓                     │</span><br><span class="line">             │  robot_cmd_service 任务       │ ← 解析字符串 → 查命令表</span><br><span class="line">             │        ↓                     │</span><br><span class="line">             │  event_queue（结构化事件）     │</span><br><span class="line">             │        ↓                     │</span><br><span class="line">             │  robot_control_task 任务      │ ← 真正的控制：运动学/PID/CAN</span><br><span class="line">             └──────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>代码</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>命令队列</td>
+<td><code>robot_cmd.c</code> → <code>robot_cmd_service</code></td>
+<td>存放原始命令字符串，串口中断里塞进来</td>
+</tr>
+<tr>
+<td>命令解析</td>
+<td><code>robot_uart1_handle()</code></td>
+<td><code>sscanf</code> 拆出命令名 + 参数，查 <code>robot_uart1_cmd_table</code></td>
+</tr>
+<tr>
+<td>事件队列</td>
+<td><code>robot.c</code> → <code>robot_control_task</code></td>
+<td>存放结构化事件（转动&#x2F;复位&#x2F;移动）</td>
+</tr>
+<tr>
+<td>控制任务</td>
+<td><code>robot_control_task()</code></td>
+<td><code>xQueueReceive</code> 死循环，按事件类型分发</td>
+</tr>
+</tbody></table>
+<p>为什么拆两层？<strong>解析字符串慢、控制要实时</strong>。把慢的解析放进低优先级任务，高优先级控制任务只处理结构化事件，互不拖累——这是嵌入式里的标准做法。</p>
+<h2 id="4-串口：你发命令的第一条通道"><a href="#4-串口：你发命令的第一条通道" class="headerlink" title="4. 串口：你发命令的第一条通道"></a>4. 串口：你发命令的第一条通道</h2><h3 id="物理层"><a href="#物理层" class="headerlink" title="物理层"></a>物理层</h3><p>电脑的 USB 口接一块 <strong>USB 转 TTL 模块</strong>（BOM 之外，约 10 元），TTL 端三根线连到开发板的 USART1（TX、RX、GND）。<strong>注意 TX 接 RX、RX 接 TX</strong>，交叉接，这是新手第一大坑。</p>
+<h3 id="代码层"><a href="#代码层" class="headerlink" title="代码层"></a>代码层</h3><p><code>usart.c</code> 里串口是<strong>逐字节中断接收</strong>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// usart.c</span></span><br><span class="line">HAL_UART_Receive_IT(&amp;huart1, (<span class="type">uint8_t</span> *)uart1_rx_buff, <span class="number">1</span>);  <span class="comment">// 每收 1 个字节触发一次</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">HAL_UART_RxCpltCallback</span><span class="params">(UART_HandleTypeDef *huart)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (huart-&gt;Instance == USART1) &#123;</span><br><span class="line">        <span class="keyword">if</span> (uart1_rx_buff[uart1_rx_pos] == <span class="string">&#x27;\n&#x27;</span>) &#123;   <span class="comment">// 收到换行符 = 一条命令结束</span></span><br><span class="line">            uart1_rx_buff[uart1_rx_pos] = <span class="string">&#x27;\0&#x27;</span>;</span><br><span class="line">            robot_cmd_send_from_isr(uart1_rx_buff, CMD_TYPE_UART1);  <span class="comment">// 塞进命令队列</span></span><br><span class="line">            uart1_rx_pos = <span class="number">0</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            uart1_rx_pos += <span class="number">1</span>;   <span class="comment">// 没结束就继续攒</span></span><br><span class="line">        &#125;</span><br><span class="line">        HAL_UART_Receive_IT(&amp;huart1, (<span class="type">uint8_t</span> *)&amp;uart1_rx_buff[uart1_rx_pos], <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>要点</strong>：</p>
+<ul>
+<li>命令以 <code>\n</code>（换行符）结束——串口工具里发命令时记得勾上”发送新行”</li>
+<li>命令最长 128 字节（<code>ROBOT_CMD_LENGTH</code>），一条命令一行</li>
+<li>中断里只做”塞队列”这一件轻量事，解析交给 <code>robot_cmd_service</code>——<strong>中断里绝不能干重活</strong></li>
+</ul>
+<h3 id="命令解析（robot-cmd-c）"><a href="#命令解析（robot-cmd-c）" class="headerlink" title="命令解析（robot_cmd.c）"></a>命令解析（robot_cmd.c）</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ret = <span class="built_in">sscanf</span>(cmd, <span class="string">&quot;%19s %f %f %f %f %f %f&quot;</span>, event_type, &amp;param[<span class="number">0</span>], ..., &amp;param[<span class="number">5</span>]);</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; robot_uart1_cmd_table[i].event_type != <span class="literal">NULL</span>; i++) &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">strcmp</span>(event_type, robot_uart1_cmd_table[i].event_type) == <span class="number">0</span>) &#123;</span><br><span class="line">        ret = robot_uart1_cmd_table[i].cmd_func(param);   <span class="comment">// 调用对应处理函数</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>命令表（<code>robot_uart1_cmd_table[]</code>）：</p>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>参数</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rel_rotate</code></td>
+<td>关节号 角度</td>
+<td>指定关节相对转动（支持负数）</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>x y z</td>
+<td>末端移动到指定位置</td>
+</tr>
+<tr>
+<td><code>hard_reset</code></td>
+<td>—</td>
+<td>硬复位：撞限位开关找零点</td>
+</tr>
+<tr>
+<td><code>soft_reset</code></td>
+<td>—</td>
+<td>软复位：回初始化角度</td>
+</tr>
+<tr>
+<td><code>zero</code></td>
+<td>—</td>
+<td>把当前位置设为零点</td>
+</tr>
+<tr>
+<td><code>remote_enable</code> &#x2F; <code>remote_disable</code> &#x2F; <code>remote_event</code></td>
+<td>—</td>
+<td>手柄遥控（第 11 篇细讲）</td>
+</tr>
+</tbody></table>
+<h2 id="5-CAN-总线：主控和电机的”高速公路”"><a href="#5-CAN-总线：主控和电机的”高速公路”" class="headerlink" title="5. CAN 总线：主控和电机的”高速公路”"></a>5. CAN 总线：主控和电机的”高速公路”</h2><h3 id="CAN-是什么"><a href="#CAN-是什么" class="headerlink" title="CAN 是什么"></a>CAN 是什么</h3><p><strong>CAN（Controller Area Network）</strong> 是工业界最常用的现场总线之一，两根线（CANH &#x2F; CANL）就能挂几十个设备，大家<strong>共用一条总线通信</strong>。特点：</p>
+<ul>
+<li><strong>差分信号</strong>：两根线上电压差传数据，抗干扰强——车间里电机狂转也不会丢数据</li>
+<li><strong>多主架构</strong>：任何节点都能主动发消息，靠<strong>仲裁</strong>解决冲突（ID 小的优先）</li>
+<li><strong>报文式</strong>：不是点对点，而是广播——带上 ID，谁关心谁收</li>
+</ul>
+<p>对机械臂来说：<strong>6 个驱动器 + 主控 &#x3D; 7 个节点挂一条双绞线</strong>，主控给每个驱动器发”转到某角度”的指令，驱动器回”我现在的位置&#x2F;状态”。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">STM32F407 ──CANH/CANL（双绞线）── 驱动器1 ── 驱动器2 ── ... ── 驱动器6</span><br><span class="line">   │  PB8/PB9                                                      │</span><br><span class="line">   └────────────── 120Ω 终端电阻 ───────────── 120Ω 终端电阻 ────────┘</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>终端电阻</strong>：总线两端各接一个 120Ω 电阻（代码里驱动拓展板上带）。没有终端电阻，高速通信会因信号反射出错——联调时”时好时坏”先查它。</p>
+</blockquote>
+<h3 id="STM32-侧配置（can-c）"><a href="#STM32-侧配置（can-c）" class="headerlink" title="STM32 侧配置（can.c）"></a>STM32 侧配置（can.c）</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">hcan1.Init.Prescaler = <span class="number">14</span>;        <span class="comment">// 预分频 → 决定波特率</span></span><br><span class="line"><span class="comment">// 过滤器：全部放行，只用一个 FIFO0</span></span><br><span class="line">canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;</span><br></pre></td></tr></table></figure>
+
+<p>收消息的回调：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">HAL_CAN_RxFifo0MsgPendingCallback</span><span class="params">(CAN_HandleTypeDef *hcan)</span> &#123;</span><br><span class="line">    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, ...);</span><br><span class="line">    <span class="comment">// 校验：DLC==3 且数据是 0xfd 0x9f 0x6b → 张大头驱动器的响应帧</span></span><br><span class="line">    <span class="keyword">if</span> ((can.CAN_RxMsg.DLC == <span class="number">3</span>) &amp;&amp; (can.rxData[<span class="number">0</span>] == <span class="number">0xfd</span>) &amp;&amp; ...) &#123; ... &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="张大头私有协议（Emm-V5-c）"><a href="#张大头私有协议（Emm-V5-c）" class="headerlink" title="张大头私有协议（Emm_V5.c）"></a>张大头私有协议（Emm_V5.c）</h3><p>张大头驱动器用的是<strong>私有 CAN 协议</strong>，每帧有固定的”功能码 + 辅助码 + 校验字节”结构。<code>Emm_V5.c</code> 封装了常用操作：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Emm_V5_Reset_CurPos_To_Zero(addr);   <span class="comment">// 功能码 0x0A：把当前编码器位置清零</span></span><br><span class="line">Emm_V5_Reset_Clog_Pro(addr);         <span class="comment">// 功能码 0x0E：解除堵转保护</span></span><br><span class="line">Emm_V5_Read_Sys_Params(addr, ...);   <span class="comment">// 读系统参数：位置/速度/电压/PID 等</span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>这也是为什么 BOM 里驱动器<strong>必须买张大头 CAN 协议版</strong>——协议层（<code>Emm_V5.c</code>）是照着张大头的私有帧格式写的，换品牌就得重写这层。这是复刻项目最容易买错的地方，再次提醒。</p>
+</blockquote>
+<h2 id="6-一条命令的完整旅程"><a href="#6-一条命令的完整旅程" class="headerlink" title="6. 一条命令的完整旅程"></a>6. 一条命令的完整旅程</h2><p>以 <code>rel_rotate 1 30</code>（关节 1 转 30°）为例，串起来看：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">你输入 &quot;rel_rotate 1 30\n&quot;</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">USART1 中断收满一行 → robot_cmd_send_from_isr() → cmd_queue</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">robot_cmd_service 任务 → sscanf 解析 → 查命令表 → robot_rel_rotate_handle()</span><br><span class="line">   │  把&quot;关节1 转30°&quot;封装成事件，塞进 event_queue</span><br><span class="line">   ▼</span><br><span class="line">robot_control_task 任务 → ROBOT_JOINT_REL_ROTATE 分支 → robot_joint_rotate_to()</span><br><span class="line">   │  按减速比换算电机角度 → 走 PID → 算 CAN 指令</span><br><span class="line">   ▼</span><br><span class="line">can.c → HAL_CAN_AddTxMessage() → CAN 总线</span><br><span class="line">   ▼</span><br><span class="line">张大头驱动器 → 电机转动 30°</span><br></pre></td></tr></table></figure>
+
+<h2 id="7-动手实验（需要硬件）"><a href="#7-动手实验（需要硬件）" class="headerlink" title="7. 动手实验（需要硬件）"></a>7. 动手实验（需要硬件）</h2><ol>
+<li>用串口工具（XCOM &#x2F; Sscom &#x2F; Serial Studio 均可）打开 USB 转 TTL 对应的 COM 口，波特率 <strong>115200</strong></li>
+<li>发 <code>hard_reset</code>，观察机械臂各关节依次转动、撞限位开关停下（这就是第 7 篇要细讲的复位）</li>
+<li>发 <code>rel_rotate 1 30</code>，关节 1 应转 30°；发 <code>rel_rotate 1 -30</code> 转回来</li>
+<li>如果没反应，串口里应该能看到日志（<code>robot control task runing!!!</code> 等）——日志是最强的调试工具</li>
+</ol>
+<h2 id="8-常见问题"><a href="#8-常见问题" class="headerlink" title="8. 常见问题"></a>8. 常见问题</h2><p><strong>Q: 串口发命令没反应？</strong><br>先看串口工具是否勾了”发送新行”（代码靠 <code>\n</code> 判定命令结束）；再看 TX&#x2F;RX 是否交叉接；最后看波特率是否 115200。</p>
+<p><strong>Q: CAN 总线为什么适合机械臂而不是 USB？</strong><br>USB 是主从结构（电脑是主机），CAN 是真正的多主总线，任意节点可主动通信；而且差分信号抗干扰、线少（2 根）、可靠性高——汽车、工业设备到处是它。</p>
+<p><strong>Q: 为什么命令解析要单独开一个任务？</strong><br>字符串解析（<code>sscanf</code>、<code>strcmp</code>）慢且会阻塞，放高优先级任务会拖累实时控制。队列解耦：中断只入队、低优先级任务慢慢解析、高优先级任务只管控制。</p>
+<h2 id="9-下一篇预告"><a href="#9-下一篇预告" class="headerlink" title="9. 下一篇预告"></a>9. 下一篇预告</h2><p><a href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-06-%E5%B5%8C%E5%85%A5%E5%BC%8F%E5%B7%A5%E5%85%B7%E9%93%BE/">06 嵌入式工具链：CubeMX &#x2F; CubeIDE &#x2F; 编译烧录</a> —— 把代码跑起来的第一步：装环境、开工程、编译、烧录，看到串口日志的那一刻就成功了一半。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io">Xucheng95</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/">https://xucheng95.github.io/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-05-%E4%B8%BB%E6%8E%A7%E4%B8%8E%E9%80%9A%E8%AE%AF/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://xucheng95.github.io" target="_blank">Xucheng95's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%9C%BA%E6%A2%B0%E8%87%82/">机械臂</a><a class="post-meta__tags" href="/tags/STM32/">STM32</a><a class="post-meta__tags" href="/tags/CAN%E6%80%BB%E7%BA%BF/">CAN总线</a><a class="post-meta__tags" href="/tags/%E4%B8%B2%E5%8F%A3/">串口</a></div><div class="post-share"><div class="social-share" data-image="/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-06-%E5%B5%8C%E5%85%A5%E5%BC%8F%E5%B7%A5%E5%85%B7%E9%93%BE/" title="ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX / CubeIDE / 编译烧录）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX / CubeIDE / 编译烧录）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 06 篇。上一篇认识了主控和通讯，这一篇把”编译烧录”这条工具链打通：装什么软件、工程目录是什么结构、怎么编译、怎么烧录、怎么用串口日志调试。里程碑：看到串口里出现 robot control task runing!!!。  1. 需要安装的软件清单   软件 作用 备注    STM32CubeMX 图形化配置外设&#x2F;时钟&#x2F;引脚，生成初始化代码 打开 robot.ioc 看工程配置   STM32CubeIDE 官方 IDE，编译 + 调试 + 下载一体 基于 Eclipse   ST-Link 驱动 让电脑识别 ST-Link 烧录器 买 ST-Link 时店家会给   串口工具 XCOM &#x2F; Sscom &#x2F; Serial Studio 看日志、发命令   VSCode（可选） 作者实际写代码的地方 只写不改配置，CubeIDE 当”工具人”    作者原话：“STM32CubeMX 用于硬件外设初始化，CubeIDE 我一般用来 DEBUG 和程序下载，敲代码我还是喜欢用 VSCode，那两...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/" title="ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">ZERO 机械臂学习之路 04：电机与传动（步进电机/减速器/同步带轮）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 04 篇。上一篇认识了物料清单，这一篇把”动力系统”讲透：步进电机为什么能精确控制、减速器怎么放大扭矩、同步带轮怎么传动力。读完你会明白代码里 reduction_ratio、MOTOR_DIR_* 这些字段到底对应机械上的什么。  1. 步进电机：能”数着步数”转的电机普通电机 vs 步进电机    普通直流电机 步进电机    控制方式 给电压就转 给脉冲序列才转   转多少 不可控（惯性大） 每脉冲转固定角度，可控   典型应用 风扇、玩具 3D 打印机、机械臂、数控机床   步进电机的核心原理：内部有多组线圈（相位），按顺序通电，转子就一步步转动。  每给一个脉冲，转子转一个步距角（比如 1.8°） 给 200 个脉冲 &#x3D; 转 360°（200 × 1.8°） 想转 90°？发 50 个脉冲就行  代码对应：Emm_V5.c 里控制电机转到指定角度，本质就是告诉驱动器”要转多少步”。 步距角（Step Angle）ZERO 用的步进电机步距角一般是 1.8°（即每脉冲转 1.8°，200 步一圈）。但加了减速器后，输出...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 08：串口命令联调（rel_rotate &#x2F; zero &#x2F; 常见坑）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate &#x2F; zero &#x2F; 常见坑）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 08 篇。复位学会了，这一篇进入正式联调：用串口命令把每个关节玩转——rel_rotate 单关节转动、zero 设零点，并系统整理联调中 90% 会遇到的坑。里程碑：每个关节都能按指令精确转动。  1. 联调前的准备  整机装配完成（没装完可以先只测主控 + 1 个电机）  第 7 篇的上电流程跑通，hard_reset 正常  串口工具（XCOM &#x2F; Sscom），波特率 115200，勾选”发送新行”  6 个驱动器的 CAN 地址确认正确（张大头驱动器用拨码&#x2F;软件设置地址 1~6，与 Emm_V5.c 里的 addr 对应）  2. 命令速查表（再复习一遍）   命令 参数 功能 联调用途    hard_reset — 硬复位 开机必做   soft_reset — 软复位 回初始姿态   zero — 当前位置设为零点 自定义零点   rel_rotate 关节号 角度 相对转动（支持负数） ★ 单关节测试   auto x y z 末端移动到指定位置 第 9 篇细讲   3. 逐条命令实操3.1 先做一...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-06-%E5%B5%8C%E5%85%A5%E5%BC%8F%E5%B7%A5%E5%85%B7%E9%93%BE/" title="ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 06：嵌入式工具链（CubeMX &#x2F; CubeIDE &#x2F; 编译烧录）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 06 篇。上一篇认识了主控和通讯，这一篇把”编译烧录”这条工具链打通：装什么软件、工程目录是什么结构、怎么编译、怎么烧录、怎么用串口日志调试。里程碑：看到串口里出现 robot control task runing!!!。  1. 需要安装的软件清单   软件 作用 备注    STM32CubeMX 图形化配置外设&#x2F;时钟&#x2F;引脚，生成初始化代码 打开 robot.ioc 看工程配置   STM32CubeIDE 官方 IDE，编译 + 调试 + 下载一体 基于 Eclipse   ST-Link 驱动 让电脑识别 ST-Link 烧录器 买 ST-Link 时店家会给   串口工具 XCOM &#x2F; Sscom &#x2F; Serial Studio 看日志、发命令   VSCode（可选） 作者实际写代码的地方 只写不改配置，CubeIDE 当”工具人”    作者原话：“STM32CubeMX 用于硬件外设初始化，CubeIDE 我一般用来 DEBUG 和程序下载，敲代码我还是喜欢用 VSCode，那两...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/" title="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 &#x2F; MuJoCo &#x2F; 展望）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 &#x2F; MuJoCo &#x2F; 展望）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的最后一篇。前 11 篇学的是”人教机器怎么动”（运动学 + PID），这一篇看”机器自己学怎么动”：用 MuJoCo 物理仿真 + TD3 强化学习，让机械臂学会末端跟踪目标位置。最后聊聊大模型接入的展望，以及整个系列的沉淀。  1. 为什么要强化学习传统控制的思路（前 9 篇）：建数学模型 → 解方程 → 写控制律。但真实世界有摩擦、形变、噪声，模型永远不完美；遇到”学会某个技能”这类问题，手工设计控制律越来越难。 强化学习（Reinforcement Learning, RL）换了个思路：不给指令，给奖励。智能体（机械臂）在环境里试错，做对了给正奖励、做错了给负奖励，最终自己摸索出策略——就像教小狗握手，做对了给零食。 12传统控制：目标 → 逆解/规划 → PID → 执行（人设计每一步）强化学习：目标 → 奖励函数 → 智能体不断试错 → 学到策略（机器自己找路径）  2. 环境：MuJoCo 里的”虚拟机械臂”代码在 5. Deep_LR/，环境文件 robot_arm_env.py，用 MuJoCo 做物理引擎（robot_ar...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-10-%E6%95%B4%E6%9C%BA%E8%A3%85%E9%85%8D/" title="ZERO 机械臂学习之路 10：整机装配（3D 打印件 &#x2F; 装配顺序 &#x2F; 走线）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 10：整机装配（3D 打印件 &#x2F; 装配顺序 &#x2F; 走线）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 10 篇。按路线图，装配篇在这里补齐：零件到手后怎么一步步装成一台能动的机械臂。里程碑：整机装完，结构稳固、走线整洁、能上电复位。  1. 装配前：你需要的东西3D 打印件（BOM 之外，必须代打或自打）：  文件：1. Model/3d_printing_all.3mf（一个文件包含全部打印件） 材料：PLA，提醒店家”高精度”（公差直接影响装配顺滑度） 参考价：50~100 元  工具清单：    工具 用途    电烙铁 压热熔螺母（必买）   内六角扳手套装 拧 M3&#x2F;M4&#x2F;M5 螺丝   十字螺丝刀 扁平头螺丝   尖嘴钳 辅助装配   扎带&#x2F;理线器 走线固定   零件核对：对照第 03 篇的采购 Checklist 清点——6 台电机（42×3 + 35×3）、行星减速器（51:1×2 + 27:1×1）、张大头驱动器×6 + 拓展板、STM32F407、同步轮×6、同步带×3、联轴器×5、圆锥滚子轴承×1、限位开关×5、全部螺丝&#x2F;热熔螺母×10。 2. 装配顺序：从下往上，先骨架后动...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-04-%E7%94%B5%E6%9C%BA%E4%B8%8E%E4%BC%A0%E5%8A%A8/" title="ZERO 机械臂学习之路 04：电机与传动（步进电机&#x2F;减速器&#x2F;同步带轮）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 04：电机与传动（步进电机&#x2F;减速器&#x2F;同步带轮）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 04 篇。上一篇认识了物料清单，这一篇把”动力系统”讲透：步进电机为什么能精确控制、减速器怎么放大扭矩、同步带轮怎么传动力。读完你会明白代码里 reduction_ratio、MOTOR_DIR_* 这些字段到底对应机械上的什么。  1. 步进电机：能”数着步数”转的电机普通电机 vs 步进电机    普通直流电机 步进电机    控制方式 给电压就转 给脉冲序列才转   转多少 不可控（惯性大） 每脉冲转固定角度，可控   典型应用 风扇、玩具 3D 打印机、机械臂、数控机床   步进电机的核心原理：内部有多组线圈（相位），按顺序通电，转子就一步步转动。  每给一个脉冲，转子转一个步距角（比如 1.8°） 给 200 个脉冲 &#x3D; 转 360°（200 × 1.8°） 想转 90°？发 50 个脉冲就行  代码对应：Emm_V5.c 里控制电机转到指定角度，本质就是告诉驱动器”要转多少步”。 步距角（Step Angle）ZERO 用的步进电机步距角一般是 1.8°（即每脉冲转 1.8°，200 步一圈）。但加了减速器后，输出...</div></div></div></a><a class="pagination-related" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-03-BOM%E7%89%A9%E6%96%99%E5%85%A8%E8%A7%A3%E6%9E%90/" title="ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="info-item-2">ZERO 机械臂学习之路 03：BOM 物料全解析（每个部件是干什么的）</div></div><div class="info-2"><div class="info-item-1"> 这是「ZERO 机械臂学习之路」系列的第 03 篇。打开仓库根目录的 BOM.xlsx，你会看到一张 29 行的物料表（含表头，共 28 项物料），每行还有淘宝链接。本篇把物料按功能分类讲清楚：每个部件是什么、干什么用、为什么需要、买的时候注意什么。采购前必读。  1. 先看整体：一套机械臂由哪几部分组成1234567891011┌─────────────────────────────────────────────┐│ 结构件：3D打印外壳 + 螺丝 + 轴承 + 热熔螺母  │ ← 机械臂的&quot;骨架&quot;├─────────────────────────────────────────────┤│ 动力：6台步进电机 + 减速器 + 同步带轮        │ ← 机械臂的&quot;肌肉&quot;├─────────────────────────────────────────────┤│ 驱动：6台张大头闭环驱动器 + 拓展板            │ ← 电机的&quot;指挥&quot;├───────────────────────────...</div></div></div></a></div></div><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div class="vcomment" id="vcomment"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Xucheng95</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">27</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/xucheng95" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E4%B8%BB%E6%8E%A7%EF%BC%9ASTM32F407VET6"><span class="toc-text">1. 主控：STM32F407VET6</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E4%B8%8A%E7%94%B5%E5%90%8E%E5%8F%91%E7%94%9F%E4%BA%86%E4%BB%80%E4%B9%88%EF%BC%9A%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B"><span class="toc-text">2. 上电后发生了什么：启动流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-FreeRTOS-%E4%BB%BB%E5%8A%A1%E6%9E%B6%E6%9E%84%EF%BC%9A%E4%B8%A4%E4%B8%AA%E9%98%9F%E5%88%97-%E4%B8%A4%E4%B8%AA%E4%BB%BB%E5%8A%A1"><span class="toc-text">3. FreeRTOS 任务架构：两个队列 + 两个任务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E4%B8%B2%E5%8F%A3%EF%BC%9A%E4%BD%A0%E5%8F%91%E5%91%BD%E4%BB%A4%E7%9A%84%E7%AC%AC%E4%B8%80%E6%9D%A1%E9%80%9A%E9%81%93"><span class="toc-text">4. 串口：你发命令的第一条通道</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%A9%E7%90%86%E5%B1%82"><span class="toc-text">物理层</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%B1%82"><span class="toc-text">代码层</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%BD%E4%BB%A4%E8%A7%A3%E6%9E%90%EF%BC%88robot-cmd-c%EF%BC%89"><span class="toc-text">命令解析（robot_cmd.c）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-CAN-%E6%80%BB%E7%BA%BF%EF%BC%9A%E4%B8%BB%E6%8E%A7%E5%92%8C%E7%94%B5%E6%9C%BA%E7%9A%84%E2%80%9D%E9%AB%98%E9%80%9F%E5%85%AC%E8%B7%AF%E2%80%9D"><span class="toc-text">5. CAN 总线：主控和电机的”高速公路”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CAN-%E6%98%AF%E4%BB%80%E4%B9%88"><span class="toc-text">CAN 是什么</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STM32-%E4%BE%A7%E9%85%8D%E7%BD%AE%EF%BC%88can-c%EF%BC%89"><span class="toc-text">STM32 侧配置（can.c）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%A0%E5%A4%A7%E5%A4%B4%E7%A7%81%E6%9C%89%E5%8D%8F%E8%AE%AE%EF%BC%88Emm-V5-c%EF%BC%89"><span class="toc-text">张大头私有协议（Emm_V5.c）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E4%B8%80%E6%9D%A1%E5%91%BD%E4%BB%A4%E7%9A%84%E5%AE%8C%E6%95%B4%E6%97%85%E7%A8%8B"><span class="toc-text">6. 一条命令的完整旅程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%EF%BC%88%E9%9C%80%E8%A6%81%E7%A1%AC%E4%BB%B6%EF%BC%89"><span class="toc-text">7. 动手实验（需要硬件）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98"><span class="toc-text">8. 常见问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E4%B8%8B%E4%B8%80%E7%AF%87%E9%A2%84%E5%91%8A"><span class="toc-text">9. 下一篇预告</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-12-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E4%B8%8E%E5%A4%A7%E6%A8%A1%E5%9E%8B/" title="ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）">ZERO 机械臂学习之路 12：强化学习与大模型（TD3 / MuJoCo / 展望）</a><time datetime="2026-08-19T22:40:00.000Z" title="发表于 2026-08-19 22:40:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-11-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6/" title="ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）">ZERO 机械臂学习之路 11：远程控制（手柄遥控 / MQTT / ESP8266）</a><time datetime="2026-08-19T22:30:00.000Z" title="发表于 2026-08-19 22:30:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-10-%E6%95%B4%E6%9C%BA%E8%A3%85%E9%85%8D/" title="ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）">ZERO 机械臂学习之路 10：整机装配（3D 打印件 / 装配顺序 / 走线）</a><time datetime="2026-08-19T22:20:00.000Z" title="发表于 2026-08-19 22:20:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-09-%E8%BF%90%E5%8A%A8%E5%AD%A6%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）">ZERO 机械臂学习之路 09：运动学联调（auto / 坐标系 / 路径插值）</a><time datetime="2026-08-19T22:10:00.000Z" title="发表于 2026-08-19 22:10:00">2026-08-19</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2026/08/19/ZERO%E6%9C%BA%E6%A2%B0%E8%87%82%E5%AD%A6%E4%B9%A0-08-%E4%B8%B2%E5%8F%A3%E5%91%BD%E4%BB%A4%E8%81%94%E8%B0%83/" title="ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）">ZERO 机械臂学习之路 08：串口命令联调（rel_rotate / zero / 常见坑）</a><time datetime="2026-08-19T22:00:00.000Z" title="发表于 2026-08-19 22:00:00">2026-08-19</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2022 - 2026 By Xucheng95</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.2</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.7.0</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="前往评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.7.0"></script><script src="/js/main.js?v=5.7.0"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script><script>(() => {
+  const isShuoshuo = GLOBAL_CONFIG_SITE.pageType === 'shuoshuo'
+  const option = null
+
+  const initValine = (el, path) => {
+    if (isShuoshuo) {
+      window.shuoshuoComment.destroyValine = () => {
+        if (el.children.length) {
+          el.innerHTML = ''
+          el.classList.add('no-comment')
+        }
+      }
+    }
+
+    const valineConfig = {
+      el: '#vcomment',
+      appId: 'dPE8NdWqLHIBK3b1UzDKzh1V-gzGzoHsz',
+      appKey: 'LVW5ij737ZzbbvgGPhZaSwtl',
+      avatar: 'monsterid',
+      serverURLs: '',
+      emojiMaps: "",
+      visitor: false,
+      ...option,
+      path: isShuoshuo ? path : (option && option.path) || window.location.pathname
+    }
+
+    new Valine(valineConfig)
+  }
+
+  const loadValine = async (el, path) => {
+    if (typeof Valine === 'function') {
+      initValine(el, path)
+    } else {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/valine@1.5.3/dist/Valine.min.js')
+      initValine(el, path)
+    }
+  }
+
+  if (isShuoshuo) {
+    'Valine' === 'Valine'
+      ? window.shuoshuoComment = { loadComment: loadValine }
+      : window.loadOtherComment = loadValine
+    return
+  }
+
+  if ('Valine' === 'Valine' || !false) {
+    if (false) btf.loadComment(document.getElementById('vcomment'),loadValine)
+    else setTimeout(loadValine, 0)
+  } else {
+    window.loadOtherComment = loadValine
+  }
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.7.0"></script></div></div></body></html>
