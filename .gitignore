@@ -9,3 +9,5 @@ _multiconfig.yml
 .vscode
 .mlpignore
 .npm-cache/
+.npm-global/
+.known_hosts
